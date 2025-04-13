@@ -1,0 +1,9 @@
+sentence_transformers
+sqlacodegen
+psycopg2
+pgvector
+scrapy
+aiohttp
+beautifulsoup4
+pandas
+dotenv
