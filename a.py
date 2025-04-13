@@ -12,6 +12,7 @@ class API():
         self.engine = create_engine('postgresql://postgres:secret@localhost:5431/postgres')
         self.session = sessionmaker(bind=self.engine)()
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
+    
     async def scrape_all(self):
         products = self.session.query(ClientQueries).all()
         queries = {}
@@ -25,19 +26,24 @@ class API():
         merca = MercadoLibre(queries=queries)
         await merca.scrape()
         for product in merca.data.itertuples(index=False):
-            product = merca.data.iloc[0]
             product_abs = self.find_nearest_title(product)
             if product_abs:
                 product_abs = product_abs[0]
-                if product_abs.distance <0.5:
-                    product_abs = self.session.query(Products).filter(Products.id == product_abs.id).first()
+                if product_abs.distance <0.75:
+                    product_abs = self.session.query(Products).filter(Products.id == product_abs.product_id).first()
                 else:
-                    del product_abs
+                    product_abs = None
             if not product_abs:
                 product_abs = Products(
                     name = product.title,
                 )
                 self.session.add(product_abs)
+                self.session.commit()
+                emb = ProductEmbeddings(
+                    product_id = product_abs.id,
+                    embedding = list(map(float,self.model.encode(product.title)))
+                )
+                self.session.add(emb)
                 self.session.commit()
 
             listing = self.find_listing_by_ml_id(product)
@@ -56,27 +62,34 @@ class API():
 
             price = Prices(
                 listing_id = listing.id,
-                price = product.price
+                price = float(product.price)
             )
             self.session.add(price)
             self.session.commit()
 
     def find_listing_by_ml_id(self,product):
-        self.session.query(Listings).filter(Listings.external_id == product.ml_id , Listings.marketplace_id == 1).all()
+        return self.session.query(Listings).filter(Listings.external_id == product.ml_id , Listings.marketplace_id == 1).all()
     def find_nearest_title(self,product):
-        query_vector  = self.model.encode(product.title)
+        # Encode the product title into a vector
+        query_vector = self.model.encode(product.title)
+        query_vector = list(map(float, query_vector))  # Ensure it's a list of floats
 
-        stmt = (
-            select(
-                ProductEmbeddings,
-                ProductEmbeddings.embedding.op('<->')(query_vector).label("distance")
-            )
-            .order_by("distance")
-            .limit(5)
-        )
-        return self.session.execute(stmt).all()
+        # Convert the query vector into a PostgreSQL-compatible array and cast it to 'vector'
+        query_vector_str = ','.join(map(str, query_vector))
 
-
+        # Raw SQL query
+        raw_query = text(f"""
+            SELECT 
+                product_id, 
+                embedding, 
+                embedding <-> '[{query_vector_str}]'::vector AS distance
+            FROM 
+                product_embeddings
+            ORDER BY 
+                distance
+            LIMIT 5;
+        """)
+        return self.session.execute(raw_query).all()
 
 
 
