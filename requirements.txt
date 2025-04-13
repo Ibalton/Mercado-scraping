@@ -7,3 +7,5 @@ aiohttp
 beautifulsoup4
 pandas
 dotenv
+fastapi
+uvicorn

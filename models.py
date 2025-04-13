@@ -1,9 +1,8 @@
 from typing import Any, List, Optional
 
+from pgvector.sqlalchemy.vector import VECTOR
 from sqlalchemy import BigInteger, Boolean, DateTime, Double, Enum, ForeignKeyConstraint, Identity, Index, Integer, Numeric, PrimaryKeyConstraint, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.sql.sqltypes import NullType
-from pgvector.sqlalchemy import Vector
 import datetime
 import decimal
 
@@ -94,11 +93,11 @@ class ClientQueries(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     client_id: Mapped[int] = mapped_column(Integer)
     query_id: Mapped[int] = mapped_column(Integer)
-    pages_to_scrape: Mapped[int] = mapped_column(Integer, server_default=text('1'))
     frequency: Mapped[str] = mapped_column(Enum('hourly', 'daily', 'weekly', 'monthly', name='query_frequency'))
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
     removed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
-    
+    pages_to_scrape: Mapped[Optional[int]] = mapped_column(Integer, server_default=text('1'))
+
     client: Mapped['Clients'] = relationship('Clients', back_populates='client_queries')
     query: Mapped['Queries'] = relationship('Queries', back_populates='client_queries')
 
@@ -155,7 +154,7 @@ class ProductEmbeddings(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    embedding: Mapped[list[float]] = mapped_column(Vector(384))
+    embedding: Mapped[Any] = mapped_column(VECTOR(384))
     product_id: Mapped[Optional[int]] = mapped_column(Integer)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
 
@@ -172,7 +171,6 @@ class Prices(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     listing_id: Mapped[Optional[str]] = mapped_column(Text)
     price: Mapped[Optional[decimal.Decimal]] = mapped_column(Numeric)
-    currency: Mapped[Optional[str]] = mapped_column(Text)
     scraped_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
 
     listing: Mapped[Optional['Listings']] = relationship('Listings', back_populates='prices')

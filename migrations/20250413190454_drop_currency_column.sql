@@ -7,5 +7,5 @@ DROP COLUMN currency;
 -- +goose Down
 -- +goose StatementBegin
 ALTER TABLE prices
-ADD COLUMN currency TEXT DEFAULT "ARS";
+ADD COLUMN currency TEXT;
 -- +goose StatementEnd
