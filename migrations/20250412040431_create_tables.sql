@@ -74,8 +74,8 @@ CREATE TABLE product_candidates (
     distance FLOAT,
     decided BOOLEAN DEFAULT FALSE,
     decided_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_query_product UNIQUE (query_id, product_id)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
 );
 
 -- Listings: each listing is tied to a candidate match.

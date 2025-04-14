@@ -63,13 +63,14 @@ class RequestsManager(BaseScraper):
         self.semaphore = asyncio.Semaphore(500)
         self.body = None
         self.session:aiohttp.ClientSession = session if session else aiohttp.ClientSession()
+        self.session_declared = True if session else False
 
     async def fetch_json(self, url, payload=None, retries=10,is_get=True):
         content = await self.fetch_content(url,payload,retries,is_get=is_get)
         return content
-    async def fetch_html(self, url, payload=None, retries=10):
+    async def fetch_html(self, url, payload=None, retries=10,extra_data=None):
         content = await self.fetch_content(url,payload,retries,is_get=True,isHTML=True)
-        return content
+        return content, extra_data
     async def fetch_content(self, url,payload=None,retries=10,is_get=True,isHTML=False):
         """
         Fetches the json content of the given URL.
@@ -124,3 +125,8 @@ class RequestsManager(BaseScraper):
         if id_name:
             return soup.find_all(tag, id=id_name)
         return soup.find_all(tag)
+    def __del__(self):
+        if not self.session_declared:
+            asyncio.run(self.session.close())
+        else:
+            print("Session not closed, declared outside of the class")
