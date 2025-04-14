@@ -1,17 +1,62 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException,Query
 import uvicorn
-
+from api import API
+from pydantic import BaseModel
+from contextlib import asynccontextmanager
+import asyncio
+api = API()
+""" @asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("🚀 Starting up...")
+    yield  # App runs here
+    print("🔻 Shutting down...")
+    global api
+    del api
+ """
 app = FastAPI()
+
+
+class QueryRequest(BaseModel):
+    query_text: str
+    client_id: int
+    frequency: str
+    pages_to_scrape: int
 
 @app.get("/")
 async def hello_world():
     return {"message": "Hello, World!"}
 
+@app.get('/query')
+async def get_queries(client_id:int = Query(None)):
+    queries = api.get_queries(client_id=client_id)
+    return queries
+@app.post("/query")
+async def create_query(body: QueryRequest):
+    print(body)
+    # Placeholder for query creation logic
+    # Replace with actual query creation logic
+    try:
+        query = api.post_query(body.query_text, body.client_id, body.frequency, body.pages_to_scrape)
+        return {"message": "Query created successfully", "query": query}
+    except Exception as e:
+        return {"error": str(e)}
+    
+class ClientRequest(BaseModel):
+    client_name: str
+    client_email: str
+@app.post("/client")
+async def create_client(body: ClientRequest):
+    try:
+        api.create_client(body.client_name, body.client_email)
+        return {"message": "Client created successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.post("/trigger-scrape")
 async def trigger_scrape():
-    # Placeholder for scrape logic
-    # Replace with actual scraping function
+    asyncio.create_task(api.scrape_all())
     return {"message": "Scrape triggered successfully"}
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=80, reload=True)

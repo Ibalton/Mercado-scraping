@@ -9,6 +9,7 @@ class MercadoLibre(RequestsManager):
 
     def __init__(self, headers=None, queries = {}, session = None, requests_per_minute=1000, requires_proxies=False):
         super().__init__(headers, queries, session, requests_per_minute, requires_proxies)
+        
         self.base_url = "https://listado.mercadolibre.com.ar/"
         self.from_url = "Desde_"
         self.url_end = "_NoIndex_True"
@@ -17,11 +18,12 @@ class MercadoLibre(RequestsManager):
         for key,value in self.queries.items():
             for i in range(0,value*50,50):
                 url = self.base_url + key + self.from_url + str(i) + self.url_end
-                task = asyncio.create_task(self.fetch_html(url))
+                task = asyncio.create_task(self.fetch_html(url,extra_data=key))
                 self.tasks.append(task)
         results = []
         for result in tqdm(asyncio.as_completed(self.tasks), total=len(self.tasks)):
-            soup = await result
+            soup,key = await result
+            
             #soup = BeautifulSoup(res.text, 'html.parser')
             for li in soup.find_all("li", {"class": "ui-search-layout__item"}):
                 url = li.find("a").attrs["href"].split("#")[0]
@@ -40,7 +42,9 @@ class MercadoLibre(RequestsManager):
                     "title": title,
                     "price": price,
                     "ml_id": ml_id,
-                    "url": url
+                    "url": url,
+                    "query": key
                 })
         self.data = pd.DataFrame(results)
         return self.data
+
