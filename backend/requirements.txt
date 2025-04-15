@@ -1,8 +1,7 @@
 sentence_transformers
 sqlacodegen
-psycopg2
+psycopg2-binary
 pgvector
-scrapy
 aiohttp
 beautifulsoup4
 pandas
