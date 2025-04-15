@@ -1,0 +1,18 @@
+services:
+
+  app:
+    build: .
+    container_name: scraper-api
+    ports:
+      - "80:80"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://postgres:secret@mercado-scrape:5432/postgres
+    networks:
+      - my_network
+networks:
+  my_network:
+    external: true
+  

@@ -8,11 +8,14 @@ from sentence_transformers import SentenceTransformer
 from base.mercadolibre import MercadoLibre
 from sqlalchemy import select
 from sqlalchemy.exc import PendingRollbackError
+from dotenv import load_dotenv
+import os
 
 # Create a database engine
 class API():
     def __init__(self):
-        self.engine = create_engine('postgresql://postgres:secret@localhost:5431/postgres')
+        load_dotenv()
+        self.engine = create_engine(os.environ.get('DATABASE_URL'), echo=True)
         self.session = sessionmaker(bind=self.engine)()
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
 
