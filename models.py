@@ -64,8 +64,8 @@ class Products(Base):
     manual_override: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
 
-    product_candidates: Mapped[List['ProductCandidates']] = relationship('ProductCandidates', back_populates='product')
     product_embeddings: Mapped[Optional['ProductEmbeddings']] = relationship('ProductEmbeddings', uselist=False, back_populates='product')
+    product_candidates: Mapped[List['ProductCandidates']] = relationship('ProductCandidates', back_populates='product')
 
 
 class Queries(Base):
@@ -103,57 +103,15 @@ class ClientQueries(Base):
     query: Mapped['Queries'] = relationship('Queries', back_populates='client_queries')
 
 
-class ProductCandidates(Base):
-    __tablename__ = 'product_candidates'
-    __table_args__ = (
-        ForeignKeyConstraint(['product_id'], ['products.id'], ondelete='CASCADE', name='product_candidates_product_id_fkey'),
-        ForeignKeyConstraint(['query_id'], ['queries.id'], ondelete='CASCADE', name='product_candidates_query_id_fkey'),
-        PrimaryKeyConstraint('id', name='product_candidates_pkey'),
-        UniqueConstraint('query_id', 'product_id', name='unique_query_product')
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    query_id: Mapped[int] = mapped_column(Integer)
-    product_id: Mapped[int] = mapped_column(Integer)
-    match_method: Mapped[str] = mapped_column(Text)
-    distance: Mapped[Optional[float]] = mapped_column(Double(53))
-    decided: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
-    decided_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
-    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
-
-    product: Mapped['Products'] = relationship('Products', back_populates='product_candidates')
-    query: Mapped['Queries'] = relationship('Queries', back_populates='product_candidates')
-    listings: Mapped['Listings'] = relationship('Listings', uselist=False, back_populates='candidate')
-
-
-class ProductEmbeddings(Base):
-    __tablename__ = 'product_embeddings'
-    __table_args__ = (
-        ForeignKeyConstraint(['product_id'], ['products.id'], ondelete='CASCADE', name='product_embeddings_product_id_fkey'),
-        PrimaryKeyConstraint('id', name='product_embeddings_pkey'),
-        UniqueConstraint('product_id', name='product_embeddings_product_id_key')
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    embedding: Mapped[Any] = mapped_column(VECTOR(384))
-    product_id: Mapped[Optional[int]] = mapped_column(Integer)
-    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
-
-    product: Mapped[Optional['Products']] = relationship('Products', back_populates='product_embeddings')
-
-
 class Listings(Base):
     __tablename__ = 'listings'
     __table_args__ = (
-        ForeignKeyConstraint(['candidate_id'], ['product_candidates.id'], ondelete='CASCADE', name='listings_candidate_id_fkey'),
         ForeignKeyConstraint(['marketplace_id'], ['marketplaces.id'], ondelete='SET NULL', name='listings_marketplace_id_fkey'),
         PrimaryKeyConstraint('id', name='listings_pkey'),
-        UniqueConstraint('candidate_id', name='listings_candidate_id_key'),
         UniqueConstraint('marketplace_id', 'external_id', name='unique_marketplace_external')
     )
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, server_default=text('gen_random_uuid()'))
-    candidate_id: Mapped[int] = mapped_column(Integer)
     marketplace_id: Mapped[Optional[int]] = mapped_column(Integer)
     external_id: Mapped[Optional[str]] = mapped_column(Text)
     title: Mapped[Optional[str]] = mapped_column(Text)
@@ -164,9 +122,27 @@ class Listings(Base):
     last_seen: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
 
-    candidate: Mapped['ProductCandidates'] = relationship('ProductCandidates', back_populates='listings')
     marketplace: Mapped[Optional['Marketplaces']] = relationship('Marketplaces', back_populates='listings')
     prices: Mapped[List['Prices']] = relationship('Prices', back_populates='listing')
+    product_candidates: Mapped[List['ProductCandidates']] = relationship('ProductCandidates', back_populates='listing')
+
+
+class ProductEmbeddings(Base):
+    __tablename__ = 'product_embeddings'
+    __table_args__ = (
+        ForeignKeyConstraint(['product_id'], ['products.id'], ondelete='CASCADE', name='product_embeddings_product_id_fkey'),
+        PrimaryKeyConstraint('id', name='product_embeddings_pkey'),
+        UniqueConstraint('product_id', name='product_embeddings_product_id_key'),
+        Index('product_embeddings_embedding_idx', 'embedding'),
+        Index('product_embeddings_embedding_idx1', 'embedding')
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    embedding: Mapped[Any] = mapped_column(VECTOR(384))
+    product_id: Mapped[Optional[int]] = mapped_column(Integer)
+    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
+
+    product: Mapped[Optional['Products']] = relationship('Products', back_populates='product_embeddings')
 
 
 class Prices(Base):
@@ -182,3 +158,27 @@ class Prices(Base):
     scraped_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
 
     listing: Mapped[Optional['Listings']] = relationship('Listings', back_populates='prices')
+
+
+class ProductCandidates(Base):
+    __tablename__ = 'product_candidates'
+    __table_args__ = (
+        ForeignKeyConstraint(['listing_id'], ['listings.id'], ondelete='CASCADE', name='fk_listing_id'),
+        ForeignKeyConstraint(['product_id'], ['products.id'], ondelete='CASCADE', name='product_candidates_product_id_fkey'),
+        ForeignKeyConstraint(['query_id'], ['queries.id'], ondelete='CASCADE', name='product_candidates_query_id_fkey'),
+        PrimaryKeyConstraint('id', name='product_candidates_pkey')
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    query_id: Mapped[int] = mapped_column(Integer)
+    product_id: Mapped[int] = mapped_column(Integer)
+    match_method: Mapped[str] = mapped_column(Text)
+    listing_id: Mapped[str] = mapped_column(Text)
+    distance: Mapped[Optional[float]] = mapped_column(Double(53))
+    decided: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
+    decided_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
+    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
+
+    listing: Mapped['Listings'] = relationship('Listings', back_populates='product_candidates')
+    product: Mapped['Products'] = relationship('Products', back_populates='product_candidates')
+    query: Mapped['Queries'] = relationship('Queries', back_populates='product_candidates')

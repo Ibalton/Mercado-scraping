@@ -46,5 +46,15 @@ class MercadoLibre(RequestsManager):
                     "query": key
                 })
         self.data = pd.DataFrame(results)
+        self.data = (
+            self.data.groupby("ml_id", as_index=False)
+            .agg({
+                "title": "first",  # Keep the first title
+                "price": "first",  # Keep the first price
+                "url": "first",    # Keep the first URL
+                "query": lambda x: "-QUERYSEP-".join(set(x))  # Combine queries into a single string
+            })
+        )
+        self.data.reset_index(drop=True, inplace=True)
         return self.data
 

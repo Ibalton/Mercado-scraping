@@ -138,6 +138,10 @@ class API():
         
     async def scrape_all(self):
         try:
+            all_new_products = []
+            all_products = []
+            all_product_embeddings = []
+
             products = self.session.query(ClientQueries).all()
             queries = {}
             # Print the fetched products
@@ -147,77 +151,94 @@ class API():
                         queries[product.query.query_text] = product.pages_to_scrape
                 else:
                     queries[product.query.query_text] = product.pages_to_scrape
-            merca = MercadoLibre(queries=queries)
-            await merca.scrape()
 
-            #For every product in the scraped data 
-            for product in merca.data.itertuples(index=False):
-                product_abs = self.find_nearest_title(product)
-                if product_abs:
-                    product_abs = product_abs[0]
-                    if product_abs.distance <0.75:
-                        product_abs = self.session.query(Products).filter(Products.id == product_abs.product_id).first()
-                    else:
-                        product_abs = None
-                if not product_abs:
-                    product_abs = Products(
+            scraper = MercadoLibre(queries=queries)
+            await scraper.scrape()
+            scraper.session.close()
+
+
+            for product in scraper.data.itertuples(index=False):
+                nearest_product = self.find_nearest_title(product)
+                if nearest_product and nearest_product.distance < 0.15:
+                    nearest_product = self.session.query(Products).filter(Products.id == nearest_product.product_id).first()
+                else:
+                    nearest_product = Products(
                         name = product.title,
                     )
-                    self.session.add(product_abs)
-                    self.safe_commit()  # Use safe_commit to handle rollback
-                    emb = ProductEmbeddings(
-                        product_id = product_abs.id,
-                        embedding = list(map(float,self.model.encode(product.title, normalize_embeddings=True)))
-                    )
-                    self.session.add(emb)
-                    self.safe_commit()  # Use safe_commit to handle rollback
-                
+                    all_new_products.append(nearest_product)
+                all_products.append(nearest_product)
+                        
+                    
+            if len(all_new_products) != 0:
+                self.session.add_all(all_new_products)
+                self.safe_commit() 
+            for product in all_new_products:
+                emb = ProductEmbeddings(
+                    product_id = product.id,
+                    embedding = list(map(float,self.model.encode(product.name, normalize_embeddings=True)))
+                )
+                all_product_embeddings.append(emb)
+            if len(all_product_embeddings) != 0:
+                self.session.add_all(all_product_embeddings)
+                self.safe_commit()
 
-                
-
+            queries = self.session.query(Queries).filter(Queries.query_text.in_(queries.keys())).all()
+            queries = {query.query_text: query for query in queries}
+            new_candidates = []
+            new_listings = []
+            all_listings = {}
+            for i,product in enumerate(scraper.data.itertuples(index=False)):
                 listing = self.find_listing_by_ml_id(product)
                 if not listing:
-                   
                     try:
-                        distance = product_abs.distance
+                        distance = all_products[i].distance
                     except:
                         distance = 0.0
-                    candidate = ProductCandidates(
-                        query_id = self.session.query(Queries).filter(Queries.query_text == product.query).first().id,
-                        product_id = product_abs.id,
-                        match_method = 'nearest',
-                        distance = distance,
-                        decided = False
-                    
-                    )
-                    self.session.add(candidate)
-                    self.safe_commit()
-                    
-
                     listing = Listings(
                         external_id = product.ml_id,
                         title = product.title,
                         url = product.url,
                         marketplace_id = 1,
-                        candidate_id = candidate.id,
                     )
-                    self.session.add(listing)
-                    self.safe_commit()  # Use safe_commit to handle rollback
-                else:
-                    listing = listing[0]
+                    new_listings.append(listing)
+                    for query in product.query.split("-QUERYSEP-"):
+                        if query not in queries:
+                            continue
+                        query = queries[query]
+                        candidate = ProductCandidates(
+                            query_id = query.id,
+                            product_id = all_products[i].id,
+                            match_method = 'cosine',
+                            distance = distance,
+                            decided = False,
+                            listing = listing
+                        )
+                        new_candidates.append(candidate)
+                all_listings[product] = listing
+            if len(new_listings) != 0:
+                self.session.add_all(new_listings)
+                self.safe_commit()
+            for candidate in new_candidates:    
+                candidate.listing_id = candidate.listing.id
+            if len(new_candidates) != 0:
+                self.session.add_all(new_candidates)
+                self.safe_commit()
 
+            all_prices = []
+            for product,listing in all_listings.items():
                 price = Prices(
                     listing_id = listing.id,
                     price = float(product.price)
                 )
-                self.session.add(price)
-                self.safe_commit()  # Use safe_commit to handle rollback
+                all_prices.append(price)
+            self.session.add_all(all_prices)
+            self.safe_commit()  # Use safe_commit to handle rollback
         except Exception as e:
             self.session.rollback()
             raise e
 
     def find_listing_by_ml_id(self,product):
-        return self.session.query(Listings).filter(Listings.external_id == product.ml_id , Listings.marketplace_id == 1).all()
+        return self.session.query(Listings).filter(Listings.external_id == product.ml_id , Listings.marketplace_id == 1).first()
     def find_nearest_title(self,product):
         # Encode the product title into a vector
         query_vector = self.model.encode(product.title, normalize_embeddings=True)
@@ -228,17 +249,17 @@ class API():
 
         # Raw SQL query
         raw_query = text(f"""
-            SELECT 
-                product_id, 
-                embedding, 
-                embedding <-> '[{query_vector_str}]'::vector AS distance
-            FROM 
-                product_embeddings
-            ORDER BY 
-                distance
-            LIMIT 5;
-        """)
-        return self.session.execute(raw_query).all()
+                        SELECT 
+                            product_id, 
+                            embedding, 
+                            embedding <=> '[{query_vector_str}]'::vector AS distance  -- Using <=> for HNSW search
+                        FROM 
+                            product_embeddings
+                        ORDER BY 
+                            distance  -- Orders by closest match
+                        LIMIT 5;    -- Limits the results to the top 5 closest matches
+                    """)
+        return self.session.execute(raw_query).first()
     def __del__(self):
         # rollback any uncommitted transactions
         try:
