@@ -53,6 +53,7 @@ class BaseScraper(ABC):
 class RequestsManager(BaseScraper):
     def __init__(self, headers=None,queries:dict = {}, session:aiohttp.ClientSession = None,requests_per_minute = 1000,request_type="json",requires_proxies=False):
         super().__init__()
+       
 
         self.queries:dict = queries
         self.headers = headers if headers else {'User-Agent': 'Mozilla/5.0'}
@@ -60,11 +61,17 @@ class RequestsManager(BaseScraper):
         self.tasks = []
         self.last_run = None
         self.requires_proxies = requires_proxies
-        self.semaphore = asyncio.Semaphore(500)
+        self.semaphore = asyncio.Semaphore(10)
         self.body = None
         self.session:aiohttp.ClientSession = session if session else aiohttp.ClientSession()
         self.session_declared = True if session else False
-
+    def get_user_agent(self):
+        """
+        Returns a random User-Agent string from a predefined list.
+        """
+        with open('./base/user-agents.txt', 'r') as f:
+            user_agents = f.readlines()
+        return random.choice(user_agents).strip()
     async def fetch_json(self, url, payload=None, retries=10,is_get=True):
         content = await self.fetch_content(url,payload,retries,is_get=is_get)
         return content
@@ -80,13 +87,15 @@ class RequestsManager(BaseScraper):
         for attempt in range(retries):
             async with self.semaphore :
               
-                await asyncio.sleep(self.delay)
+                await asyncio.sleep(self.delay + random.uniform(0, 5))  # Random delay between requests
                 try:
                     if is_get:
                         req_type = self.session.get
                     else:
                         req_type = self.session.post
-                    async with req_type(url,data=payload, headers=self.headers, ssl=False, proxy=proxy,timeout=600,json=self.body) as response:
+                    headers = self.headers.copy()
+                    headers['User-Agent'] = self.get_user_agent()
+                    async with req_type(url,data=payload, headers=headers, ssl=False, proxy=proxy,timeout=600,json=self.body) as response:
                         response.raise_for_status()
                         if isHTML:
                             return self.parse_html(await response.text())
