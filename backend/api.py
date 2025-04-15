@@ -10,6 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import PendingRollbackError
 import os
 
+from dotenv import load_dotenv
+import os
 
 # Create a database engine
 class API():
