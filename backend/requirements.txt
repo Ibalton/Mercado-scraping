@@ -9,3 +9,4 @@ pandas
 dotenv
 fastapi
 uvicorn
+torch
