@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException,Query
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from api import API
 from pydantic import BaseModel
@@ -14,6 +15,14 @@ async def lifespan(app: FastAPI):
     del api
  """
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or ["http://localhost:3000"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class QueryRequest(BaseModel):
