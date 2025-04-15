@@ -167,7 +167,7 @@ class API():
                     self.safe_commit()  # Use safe_commit to handle rollback
                     emb = ProductEmbeddings(
                         product_id = product_abs.id,
-                        embedding = list(map(float,self.model.encode(product.title)))
+                        embedding = list(map(float,self.model.encode(product.title, normalize_embeddings=True)))
                     )
                     self.session.add(emb)
                     self.safe_commit()  # Use safe_commit to handle rollback
@@ -220,7 +220,7 @@ class API():
         return self.session.query(Listings).filter(Listings.external_id == product.ml_id , Listings.marketplace_id == 1).all()
     def find_nearest_title(self,product):
         # Encode the product title into a vector
-        query_vector = self.model.encode(product.title)
+        query_vector = self.model.encode(product.title, normalize_embeddings=True)
         query_vector = list(map(float, query_vector))  # Ensure it's a list of floats
 
         # Convert the query vector into a PostgreSQL-compatible array and cast it to 'vector'
