@@ -134,8 +134,17 @@ class RequestsManager(BaseScraper):
         if id_name:
             return soup.find_all(tag, id=id_name)
         return soup.find_all(tag)
+    async def close(self):
+        """
+        Closes the aiohttp session.
+        """
+        if self.session_declared:
+            await self.session.close()
+            self.session_declared = False
+        else:
+            print("Session not declared, cannot close")
     def __del__(self):
         if not self.session_declared:
-            asyncio.run(self.session.close())
+            asyncio.run(self.close())
         else:
             print("Session not closed, declared outside of the class")
