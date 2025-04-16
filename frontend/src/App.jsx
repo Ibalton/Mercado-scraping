@@ -116,9 +116,9 @@ function App() {
       {/* Header with title and Trigger Scrape button */}
       <div className="d-flex justify-content-between align-items-center mb-4">
       <h1 className="text-center mb-4">Mercado Scrape</h1>
-        <button className="btn btn-danger" onClick={handleTriggerScrape}>
+        {/* <button className="btn btn-danger" onClick={handleTriggerScrape}>
           Trigger Scrape
-        </button>
+        </button> */}
       </div>
 
       {/* View Selector */}
