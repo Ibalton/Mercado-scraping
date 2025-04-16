@@ -85,22 +85,35 @@ class API():
             self.session.rollback()
             raise e
 
-    def get_queries(self, client_id=None,client_name=None):
+    def get_queries(self, client_id=None,client_email=None):
         queries = self.session.query(Queries)
 
-        if client_id:
+        if client_id or client_email:
             # Join with ClientQueries to include additional fields
-            queries = (
-                queries.join(ClientQueries)
-                .filter(ClientQueries.client_id == client_id)
-                .with_entities(
-                    Queries.query_text,
-                    ClientQueries.pages_to_scrape,
-                    ClientQueries.frequency,
-                    Queries.created_at,
-                    Queries.removed_at
+            if client_id:
+                queries = (
+                    queries.join(ClientQueries)
+                    .filter(ClientQueries.client_id == client_id)
+                    .with_entities(
+                        Queries.query_text,
+                        ClientQueries.pages_to_scrape,
+                        ClientQueries.frequency,
+                        Queries.created_at,
+                        Queries.removed_at
+                    )
                 )
-            )
+            else:
+                queries = (
+                    queries.join(ClientQueries.Client)
+                    .filter(Clients.email == client_email)
+                    .with_entities(
+                        Queries.query_text,
+                        ClientQueries.pages_to_scrape,
+                        ClientQueries.frequency,
+                        Queries.created_at,
+                        Queries.removed_at
+                    )
+                )
             # Convert the result to a list of dictionaries
             result = [
                 {
