@@ -10,7 +10,14 @@ from sqlalchemy import select
 from sqlalchemy.exc import PendingRollbackError
 from dotenv import load_dotenv
 import os
+from sqlalchemy.orm import class_mapper
 
+def serialize_model(model):
+    """
+    Serialize a SQLAlchemy model instance into a dictionary.
+    """
+    columns = [column.key for column in class_mapper(model.__class__).columns]
+    return {column: getattr(model, column) for column in columns}
 # Create a database engine
 class API():
     def __init__(self):
@@ -28,6 +35,34 @@ class API():
         except PendingRollbackError:
             self.session.rollback()
             raise Exception("Transaction failed and was rolled back.")
+    def get_query_results(self, query_id:int):
+        try:
+            productCandidates = self.session.query(ProductCandidates)\
+                                .filter(ProductCandidates.query_id == query_id).all()
+            # get all the listings for the product candidates
+            listings = []
+            for productCandidate in productCandidates:
+                listing = self.session.query(Listings)\
+                            .filter(Listings.id == productCandidate.listing_id).first()
+                if listing:
+                    listings.append(listing)
+            results = []
+            # add the listing prices (ordered by timestamp) to the serialized listing
+            for listing in listings:
+                prices = (
+                    self.session.query(Prices)
+                    .filter(Prices.listing_id == listing.id)
+                    .order_by(Prices.scraped_at.asc())  # ordering price history chronologically
+                    .all()
+                )
+                listing_dict = serialize_model(listing)
+                # serialize prices for each listing
+                listing_dict["prices"] = [serialize_model(price) for price in prices]
+                results.append(listing_dict)
+            return results
+        except Exception as e:
+            self.session.rollback()
+            raise e
 
     def get_queries(self, client_id=None):
         queries = self.session.query(Queries)
@@ -68,7 +103,7 @@ class API():
 
         return result
     
-    def create_client(self, client_name: str, client_email: str):
+    def create_client(self, client_name: str, client_email: str)->dict:
         try:
             client = self.session.query(Clients).filter(Clients.email == client_email).first()
             if not client:
@@ -80,12 +115,12 @@ class API():
                 self.safe_commit()  # Use safe_commit to handle rollback
             else:
                 raise Exception('Client already exists')
-            return client
+            return serialize_model(client)
         except Exception as e:
             self.session.rollback()
             raise e
 
-    def post_query(self, query_text, client_id, frequency, pages_to_scrape):
+    def post_query(self, query_text, client_id, frequency, pages_to_scrape)-> ClientQueries:
         try:
             query = self.session.query(Queries).filter(Queries.query_text == query_text).first()
             if not query:
