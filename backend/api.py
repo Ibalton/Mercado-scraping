@@ -8,6 +8,8 @@ from sentence_transformers import SentenceTransformer
 from base.mercadolibre import MercadoLibre
 from sqlalchemy import select
 from sqlalchemy.exc import PendingRollbackError
+import os
+
 from dotenv import load_dotenv
 import os
 from sqlalchemy.orm import class_mapper
@@ -21,8 +23,9 @@ def serialize_model(model):
 # Create a database engine
 class API():
     def __init__(self):
-        load_dotenv()
-        self.engine = create_engine(os.environ.get('DATABASE_URL'), echo=True)
+        DATABASE_URL = "postgresql+psycopg2://postgres:secret@db:5432/postgres"  # ✅ should be using env var
+        print(DATABASE_URL)
+        self.engine = create_engine(DATABASE_URL)
         self.session = sessionmaker(bind=self.engine)()
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
 
