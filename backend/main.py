@@ -36,8 +36,8 @@ async def hello_world():
     return {"message": "Hello, World!"}
 
 @app.get('/query')
-async def get_queries(client_id:int = Query(None)):
-    queries = api.get_queries(client_id=client_id)
+async def get_queries(client_id:int = Query(None),client_email:str = Query(None)):
+    queries = api.get_queries(client_id=client_id, client_email=client_email)
     return queries
 @app.get('/query/results')
 async def get_query_results(query_id:int = Query(None)):
@@ -72,5 +72,5 @@ async def trigger_scrape():
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=80, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
 
