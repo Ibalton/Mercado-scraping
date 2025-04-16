@@ -115,7 +115,8 @@ class API():
                         ClientQueries.pages_to_scrape,
                         ClientQueries.frequency,
                         Queries.created_at,
-                        Queries.removed_at
+                        Queries.removed_at,
+                        Queries.id
                     )
                 )
             # Convert the result to a list of dictionaries
@@ -125,19 +126,22 @@ class API():
                     "pages_to_scrape": pages_to_scrape,
                     "frequency": frequency,
                     "created_at": created_at,
-                    "removed_at": removed_at
+                    "removed_at": removed_at,
+                    "query_id": id
                 }
-                for query_text, pages_to_scrape, frequency,created_at,removed_at in queries.all()
+                for query_text, pages_to_scrape, frequency,created_at,removed_at,id in queries.all()
             ]
         else:
             # If no client_id is provided, return only the query text
             queries = queries.with_entities(Queries.query_text,
                                             Queries.created_at,
-                                            Queries.removed_at)
+                                            Queries.removed_at,
+                                            Queries.id)
             # Convert the result to a list of dictionaries
             result = [{"query_text": query_text,
                        "created_at": created_at,
-                    "removed_at": removed_at } for query_text,created_at,removed_at in queries.all()]
+                    "removed_at": removed_at,
+                     "query_id":id } for query_text,created_at,removed_at,id in queries.all()]
 
         return result
     
