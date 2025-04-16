@@ -3,10 +3,13 @@ import axiosClient from './axiosClient'; // Import your custom axios instance
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 function App() {
-  // "create", "view", "client"
+  // "create", "view", "results", "client"
   const [view, setView] = useState('create');
   const [queries, setQueries] = useState([]);
   const [message, setMessage] = useState('');
+
+  const [results, setResults] = useState([]);
+  const [queryId, setQueryId] = useState('');
 
   // For Query Posting and Viewing
   const [queryForm, setQueryForm] = useState({
@@ -30,6 +33,16 @@ function App() {
   // Change handler for client form
   const handleClientChange = (e) => {
     setClientForm({ ...clientForm, [e.target.name]: e.target.value });
+  };
+
+  // Trigger scraping by posting to the endpoint
+  const handleTriggerScrape = async () => {
+    try {
+      const response = await axiosClient.post('/trigger-scrape');
+      setMessage(response.data.message || 'Scrape triggered successfully!');
+    } catch (error) {
+      setMessage('❌ Error triggering scrape: ' + (error.response?.data?.detail || error.message));
+    }
   };
 
   // Submit new query using axiosClient
@@ -83,9 +96,30 @@ function App() {
     }
   };
 
+  // Fetch product results for a given query ID using axiosClient
+  const fetchResults = async () => {
+    if (!queryId) {
+      setMessage("⚠️ Please enter a Query ID to load results.");
+      return;
+    }
+    try {
+      const response = await axiosClient.get(`/query/results?query_id=${queryId}`);
+      setResults(response.data);
+      setMessage('');
+    } catch (error) {
+      setMessage('❌ Error fetching results: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
   return (
     <div className="container py-5">
-      <h1 className="text-center mb-4">🚀 FastAPI + React Dashboard</h1>
+      {/* Header with title and Trigger Scrape button */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
+      <h1 className="text-center mb-4">Mercado Scrape</h1>
+        <button className="btn btn-danger" onClick={handleTriggerScrape}>
+          Trigger Scrape
+        </button>
+      </div>
 
       {/* View Selector */}
       <div className="mb-4 d-flex justify-content-center">
@@ -103,6 +137,12 @@ function App() {
           }}
         >
           📋 View Queries
+        </button>
+        <button 
+          className={`btn me-2 ${view === 'results' ? 'btn-primary' : 'btn-outline-primary'}`} 
+          onClick={() => setView('results')}
+        >
+          📦 View Results
         </button>
         <button 
           className={`btn ${view === 'client' ? 'btn-primary' : 'btn-outline-primary'}`} 
@@ -196,6 +236,79 @@ function App() {
               ))
             )}
           </ul>
+        </>
+      )}
+
+      {/* View Results */}
+      {view === 'results' && (
+        <>
+          <h3 className="mt-4">Product Results for Query</h3>
+          <div className="row mb-3">
+            <div className="col-md-3">
+              <input 
+                type="number" 
+                className="form-control" 
+                placeholder="Enter Query ID" 
+                value={queryId} 
+                onChange={(e) => setQueryId(e.target.value)} 
+              />
+            </div>
+            <div className="col-md-3">
+              <button className="btn btn-secondary" onClick={fetchResults}>
+                📥 Load Results
+              </button>
+            </div>
+          </div>
+
+          <div className="row">
+            {results.length === 0 ? (
+              <div className="col-12">
+                <p>No results found.</p>
+              </div>
+            ) : (
+              results.map((r, index) => (
+                <div key={index} className="col-md-4 mb-4">
+                  <div className="card h-100 shadow-sm">
+                    <img 
+                      src={r.image || 'https://via.placeholder.com/300x200?text=No+Image'} 
+                      className="card-img-top" 
+                      alt={r.title || r.id} 
+                      style={{ objectFit: 'cover', height: '200px' }}
+                    />
+                    <div className="card-body d-flex flex-column">
+                      <h5 className="card-title">{r.title || r.id}</h5>
+                      {r.listings && r.listings.length > 0 ? (
+                        r.listings.map((listing, idx) => {
+                          // Get the latest price from this listing's prices array
+                          const latestPrice = listing.prices && listing.prices.length > 0 
+                            ? listing.prices[listing.prices.length - 1] 
+                            : null;
+                          return (
+                            <div key={idx} className="d-flex justify-content-between align-items-center my-2">
+                              <span className="text-primary h5">
+                                ${latestPrice && latestPrice.price ? latestPrice.price.toLocaleString() : 'N/A'}
+                              </span>
+                              <a 
+                                href={listing.url || '#'} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="btn btn-warning"
+                              >
+                                Ver producto
+                              </a>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p>No listings available.</p>
+                      )}
+                      <div className="mt-auto"></div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </>
       )}
 
