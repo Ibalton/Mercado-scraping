@@ -39,35 +39,53 @@ class API():
             self.session.rollback()
             raise Exception("Transaction failed and was rolled back.")
     def get_query_results(self, query_id:int):
+        query = text(f"""
+        SELECT l.id,l.external_id,l.title,l.url,p.price,p.scraped_at,pro.name,pro.created_at
+        FROM product_candidates pc
+        INNER JOIN products pro ON pc.product_id = pro.id
+        INNER JOIN listings l ON pc.listing_id = l.id
+        INNER JOIN prices p ON l.id = p.listing_id
+        WHERE pc.query_id = {query_id}
+        """)
         try:
-            productCandidates = self.session.query(ProductCandidates)\
-                                .filter(ProductCandidates.query_id == query_id).all()
-            # get all the listings for the product candidates
-            listings = []
-            for productCandidate in productCandidates:
-                listing = self.session.query(Listings)\
-                            .filter(Listings.id == productCandidate.listing_id).first()
-                if listing:
-                    listings.append(listing)
-            results = []
-            # add the listing prices (ordered by timestamp) to the serialized listing
-            for listing in listings:
-                prices = (
-                    self.session.query(Prices)
-                    .filter(Prices.listing_id == listing.id)
-                    .order_by(Prices.scraped_at.asc())  # ordering price history chronologically
-                    .all()
-                )
-                listing_dict = serialize_model(listing)
-                # serialize prices for each listing
-                listing_dict["prices"] = [serialize_model(price) for price in prices]
-                results.append(listing_dict)
-            return results
+            result = self.session.execute(query).fetchall()
+            # Convert the result to a list of dictionaries
+            products = dict()
+
+            for row in result:
+                product_id = row[6]
+                if product_id in products:
+                    listings = products[product_id]["listings"]
+                else:
+                    products[product_id] = {
+                        "id": product_id,
+                        "name": row[7],
+                        "listings": dict()
+                    }
+                    listings = products[product_id]["listings"]
+                
+                if row[1] in listings:
+                    listings[row[0]]["prices"].append({"price": row[4], "created_at": row[5]})
+                else:
+                    listing = {
+                        "id": row[0],
+                        "external_id": row[1],
+                        "title": row[2],
+                        "url": row[3],
+                        "prices":[
+                            {"price": row[4], "created_at": row[5]}
+                        ]
+                    }
+                    listings[row[0]] = listing
+            for key in products:
+                products[key]["listings"] = list(products[key]["listings"].values())
+            return list(products.values())
+                    
         except Exception as e:
             self.session.rollback()
             raise e
 
-    def get_queries(self, client_id=None):
+    def get_queries(self, client_id=None,client_name=None):
         queries = self.session.query(Queries)
 
         if client_id:
@@ -308,8 +326,11 @@ class API():
         except Exception as e:
             print(f"Error during rollback: {e}")
         # Close the session and dispose of the engine
-        self.session.close()
-        self.engine.dispose()
+        try:
+            self.session.close()
+            self.engine.dispose()
+        except Exception as e:
+            print(f"Error during session close: {e}")
 
         print("Session closed and engine disposed.")
 
