@@ -269,8 +269,9 @@ function App() {
               results.map((r, index) => (
                 <div key={index} className="col-md-4 mb-4">
                   <div className="card h-100 shadow-sm">
+                  {console.log(r)}
                     <img 
-                      src={r.image || 'https://via.placeholder.com/300x200?text=No+Image'} 
+                      src={r.listings[0].img_url || 'https://via.placeholder.com/300x200?text=No+Image'} 
                       className="card-img-top" 
                       alt={r.title || r.id} 
                       style={{ objectFit: 'cover', height: '200px' }}
