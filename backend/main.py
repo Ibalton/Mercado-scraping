@@ -36,8 +36,8 @@ async def hello_world():
     return {"message": "Hello, World!"}
 
 @app.get('/query')
-async def get_queries(client_id:int = Query(None)):
-    queries = api.get_queries(client_id=client_id)
+async def get_queries(client_id:int = Query(None),client_email:str = Query(None)):
+    queries = api.get_queries(client_id=client_id, client_email=client_email)
     return queries
 @app.get('/query/results')
 async def get_query_results(query_id:int = Query(None)):
