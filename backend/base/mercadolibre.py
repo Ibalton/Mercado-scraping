@@ -27,6 +27,10 @@ class MercadoLibre(RequestsManager):
             #soup = BeautifulSoup(res.text, 'html.parser')
             for li in soup.find_all("li", {"class": "ui-search-layout__item"}):
                 url = li.find("a").attrs["href"].split("#")[0]
+                
+                img_url = li.find("div",{"class": "poly-card__portada"}).find("img").attrs["src"]
+                if "data" in img_url:
+                    img_url = li.find("div",{"class": "poly-card__portada"}).find("img").attrs["data-src"]
                 if "mclics" in url: #ads that are not from the search
                     continue
                 if "/p/" in url:
@@ -43,7 +47,8 @@ class MercadoLibre(RequestsManager):
                     "price": price,
                     "ml_id": ml_id,
                     "url": url,
-                    "query": key
+                    "query": key,
+                    "img_url": img_url
                 })
         self.data = pd.DataFrame(results)
         self.data = (
@@ -52,6 +57,7 @@ class MercadoLibre(RequestsManager):
                 "title": "first",  # Keep the first title
                 "price": "first",  # Keep the first price
                 "url": "first",    # Keep the first URL
+                "img_url": "first",  # Keep the first image URL
                 "query": lambda x: "-QUERYSEP-".join(set(x))  # Combine queries into a single string
             })
         )

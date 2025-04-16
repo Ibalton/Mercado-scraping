@@ -23,7 +23,7 @@ def serialize_model(model):
 # Create a database engine
 class API():
     def __init__(self):
-        DATABASE_URL = "postgresql+psycopg2://postgres:secret@db:5432/postgres"  # ✅ should be using env var
+        DATABASE_URL = "postgresql+psycopg2://postgres:secret@localhost:5431/postgres"  # ✅ should be using env var
         print(DATABASE_URL)
         self.engine = create_engine(DATABASE_URL)
         self.session = sessionmaker(bind=self.engine)()
@@ -40,7 +40,8 @@ class API():
             raise Exception("Transaction failed and was rolled back.")
     def get_query_results(self, query_id:int):
         query = text(f"""
-        SELECT l.id,l.external_id,l.title,l.url,p.price,p.scraped_at,pro.name,pro.created_at
+        SELECT l.id,l.external_id,l.title,l.url,p.price,p.scraped_at,pro.name,pro.created_at,l.img_url,
+                     l.created_at,l.last_seen
         FROM product_candidates pc
         INNER JOIN products pro ON pc.product_id = pro.id
         INNER JOIN listings l ON pc.listing_id = l.id
@@ -64,7 +65,7 @@ class API():
                     }
                     listings = products[product_id]["listings"]
                 
-                if row[1] in listings:
+                if row[0] in listings:
                     listings[row[0]]["prices"].append({"price": row[4], "created_at": row[5]})
                 else:
                     listing = {
@@ -72,6 +73,9 @@ class API():
                         "external_id": row[1],
                         "title": row[2],
                         "url": row[3],
+                        "img_url": row[8],	
+                        "created_at": row[9],
+                        "last_seen": row[10],
                         "prices":[
                             {"price": row[4], "created_at": row[5]}
                         ]
@@ -226,7 +230,7 @@ class API():
 
             scraper = MercadoLibre(queries=queries)
             await scraper.scrape()
-            scraper.session.close()
+            await scraper.session.close()
 
 
             for product in scraper.data.itertuples(index=False):
@@ -259,6 +263,7 @@ class API():
             new_candidates = []
             new_listings = []
             all_listings = {}
+            safe_commit = False
             for i,product in enumerate(scraper.data.itertuples(index=False)):
                 listing = self.find_listing_by_ml_id(product)
                 if not listing:
@@ -271,8 +276,10 @@ class API():
                         title = product.title,
                         url = product.url,
                         marketplace_id = 1,
+                        img_url = product.img_url
                     )
                     new_listings.append(listing)
+                    
                     for query in product.query.split("-QUERYSEP-"):
                         if query not in queries:
                             continue
@@ -286,10 +293,16 @@ class API():
                             listing = listing
                         )
                         new_candidates.append(candidate)
+                elif listing.img_url != product.img_url:
+                    listing.img_url = product.img_url
+                    safe_commit = True
                 all_listings[product] = listing
             if len(new_listings) != 0:
                 self.session.add_all(new_listings)
+                safe_commit = True
+            if safe_commit:
                 self.safe_commit()
+            
             for candidate in new_candidates:    
                 candidate.listing_id = candidate.listing.id
             if len(new_candidates) != 0:

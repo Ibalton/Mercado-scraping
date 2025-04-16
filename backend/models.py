@@ -121,6 +121,7 @@ class Listings(Base):
     availability: Mapped[Optional[str]] = mapped_column(Text)
     last_seen: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
+    img_url: Mapped[Optional[str]] = mapped_column(String(255), server_default=text('NULL::character varying'))
 
     marketplace: Mapped[Optional['Marketplaces']] = relationship('Marketplaces', back_populates='listings')
     prices: Mapped[List['Prices']] = relationship('Prices', back_populates='listing')

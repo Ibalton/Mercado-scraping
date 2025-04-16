@@ -24,6 +24,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+tasks = []
+
 
 class QueryRequest(BaseModel):
     query_text: str
@@ -64,10 +66,14 @@ async def create_client(body: ClientRequest):
         return {"message": "Client created successfully","client": client}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
+#TODO: allow specific query scrapes or user specific query scrapes
 @app.post("/trigger-scrape")
 async def trigger_scrape():
-    asyncio.create_task(api.scrape_all())
+    if tasks:
+        return {"message": "Scrape already in progress"}
+    task = asyncio.create_task(api.scrape_all())
+    task.add_done_callback(lambda t: tasks.pop() if tasks else None)
+    tasks.append(task)
     return {"message": "Scrape triggered successfully"}
 
 
