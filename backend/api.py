@@ -23,7 +23,7 @@ def serialize_model(model):
 # Create a database engine
 class API():
     def __init__(self):
-        DATABASE_URL = "postgresql+psycopg2://postgres:secret@localhost:5431/postgres"  # ✅ should be using env var
+        DATABASE_URL = "postgresql+psycopg2://postgres:secret@db:5432/postgres"  # ✅ should be using env var
         print(DATABASE_URL)
         self.engine = create_engine(DATABASE_URL)
         self.session = sessionmaker(bind=self.engine)()
