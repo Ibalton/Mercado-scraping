@@ -39,6 +39,10 @@ async def hello_world():
 async def get_queries(client_id:int = Query(None)):
     queries = api.get_queries(client_id=client_id)
     return queries
+@app.get('/query/results')
+async def get_query_results(query_id:int = Query(None)):
+    results = api.get_query_results(query_id=query_id)
+    return results
 @app.post("/query")
 async def create_query(body: QueryRequest):
     print(body)
@@ -56,8 +60,8 @@ class ClientRequest(BaseModel):
 @app.post("/client")
 async def create_client(body: ClientRequest):
     try:
-        api.create_client(body.client_name, body.client_email)
-        return {"message": "Client created successfully"}
+        client = api.create_client(body.client_name, body.client_email)
+        return {"message": "Client created successfully","client": client}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

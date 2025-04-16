@@ -12,7 +12,14 @@ import os
 
 from dotenv import load_dotenv
 import os
+from sqlalchemy.orm import class_mapper
 
+def serialize_model(model):
+    """
+    Serialize a SQLAlchemy model instance into a dictionary.
+    """
+    columns = [column.key for column in class_mapper(model.__class__).columns]
+    return {column: getattr(model, column) for column in columns}
 # Create a database engine
 class API():
     def __init__(self):
@@ -31,8 +38,54 @@ class API():
         except PendingRollbackError:
             self.session.rollback()
             raise Exception("Transaction failed and was rolled back.")
+    def get_query_results(self, query_id:int):
+        query = text(f"""
+        SELECT l.id,l.external_id,l.title,l.url,p.price,p.scraped_at,pro.name,pro.created_at
+        FROM product_candidates pc
+        INNER JOIN products pro ON pc.product_id = pro.id
+        INNER JOIN listings l ON pc.listing_id = l.id
+        INNER JOIN prices p ON l.id = p.listing_id
+        WHERE pc.query_id = {query_id}
+        """)
+        try:
+            result = self.session.execute(query).fetchall()
+            # Convert the result to a list of dictionaries
+            products = dict()
 
-    def get_queries(self, client_id=None):
+            for row in result:
+                product_id = row[6]
+                if product_id in products:
+                    listings = products[product_id]["listings"]
+                else:
+                    products[product_id] = {
+                        "id": product_id,
+                        "name": row[7],
+                        "listings": dict()
+                    }
+                    listings = products[product_id]["listings"]
+                
+                if row[1] in listings:
+                    listings[row[0]]["prices"].append({"price": row[4], "created_at": row[5]})
+                else:
+                    listing = {
+                        "id": row[0],
+                        "external_id": row[1],
+                        "title": row[2],
+                        "url": row[3],
+                        "prices":[
+                            {"price": row[4], "created_at": row[5]}
+                        ]
+                    }
+                    listings[row[0]] = listing
+            for key in products:
+                products[key]["listings"] = list(products[key]["listings"].values())
+            return list(products.values())
+                    
+        except Exception as e:
+            self.session.rollback()
+            raise e
+
+    def get_queries(self, client_id=None,client_name=None):
         queries = self.session.query(Queries)
 
         if client_id:
@@ -71,7 +124,7 @@ class API():
 
         return result
     
-    def create_client(self, client_name: str, client_email: str):
+    def create_client(self, client_name: str, client_email: str)->dict:
         try:
             client = self.session.query(Clients).filter(Clients.email == client_email).first()
             if not client:
@@ -83,12 +136,12 @@ class API():
                 self.safe_commit()  # Use safe_commit to handle rollback
             else:
                 raise Exception('Client already exists')
-            return client
+            return serialize_model(client)
         except Exception as e:
             self.session.rollback()
             raise e
 
-    def post_query(self, query_text, client_id, frequency, pages_to_scrape):
+    def post_query(self, query_text, client_id, frequency, pages_to_scrape)-> ClientQueries:
         try:
             query = self.session.query(Queries).filter(Queries.query_text == query_text).first()
             if not query:
@@ -273,8 +326,11 @@ class API():
         except Exception as e:
             print(f"Error during rollback: {e}")
         # Close the session and dispose of the engine
-        self.session.close()
-        self.engine.dispose()
+        try:
+            self.session.close()
+            self.engine.dispose()
+        except Exception as e:
+            print(f"Error during session close: {e}")
 
         print("Session closed and engine disposed.")
 
