@@ -2,6 +2,14 @@ module "vpc" {
   source = "./modules/vpc"
 }
 
+module "ecr"{
+  source = "./modules/ecr"
+}
+
+output "ecr_repo_url" {
+  value = module.ecr.ecr_repo_url
+}
+
 module "ec2" {
   source             = "./modules/ec2"
   vpc_id             = module.vpc.vpc_id
@@ -19,3 +27,4 @@ module "rds" {
   vpc_security_group_ids = [module.ec2.db_sg_id]
   private_subnet_ids = module.vpc.private_subnet_ids
 }
+
