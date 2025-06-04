@@ -1,4 +1,6 @@
 # ECS Cluster
+
+
 resource "aws_ecs_cluster" "mercado_cluster" {
   name = "mercado-scraper-cluster"
 
@@ -68,6 +70,11 @@ resource "aws_cloudwatch_log_group" "backend" {
 
 resource "aws_cloudwatch_log_group" "frontend" {
   name              = "/ecs/mercado-frontend"
+  retention_in_days = 7
+}
+
+resource "aws_cloudwatch_log_group" "scraper" {
+  name              = "/ecs/mercado-scraper"
   retention_in_days = 7
 }
 
@@ -153,6 +160,40 @@ resource "aws_ecs_task_definition" "frontend" {
     }
   ])
 }
+
+
+resource "aws_ecs_task_definition" "scraper_task" {
+  family                   = "mercado-scraper-task"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = data.aws_iam_role.lab_role.arn   # <- No longer created
+  task_role_arn            = data.aws_iam_role.lab_role.arn       
+
+  container_definitions = jsonencode([
+    {
+      name      = "mercado-scraper"
+      image     = var.scraper_image
+      essential = true,
+      environment = [
+        {
+          name  = "SQS_QUEUE_URL"
+          value = var.sqs_queue_url
+        }
+      ],
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.scraper.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "ecs"
+        }
+      }
+    }
+  ])
+}
+
 
 # Application Load Balancer
 resource "aws_lb" "main" {

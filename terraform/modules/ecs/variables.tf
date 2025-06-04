@@ -3,6 +3,12 @@ variable "vpc_id" {
   type        = string
 }
 
+
+variable "sqs_queue_url" {
+  description = "Queue url for scraping requests"
+}
+
+
 variable "public_subnet_ids" {
   description = "List of public subnet IDs"
   type        = list(string)
@@ -35,5 +41,11 @@ variable "backend_image" {
 
 variable "frontend_image" {
   description = "Frontend Docker image URI with immutable tag"
+  type        = string
+} 
+
+
+variable "scraper_image" {
+  description = "Scraper Docker image URI with immutable tag"
   type        = string
 } 

@@ -1,0 +1,6 @@
+aiohttp
+beautifulsoup4
+pandas
+dotenv
+boto3 
+sentence_transformers

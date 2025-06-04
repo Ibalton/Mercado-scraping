@@ -20,6 +20,9 @@ module "ec2" {
   my_ip              = var.my_ip
 }
 
+module "sqs" {
+  source = "./modules/sqs"
+}
 module "rds" {
   source             = "./modules/rds"
   vpc_id             = module.vpc.vpc_id
@@ -53,6 +56,10 @@ module "ecs" {
   # Use image URIs from ECR build module with immutable tags
   backend_image  = module.ecr_build.backend_image
   frontend_image = module.ecr_build.frontend_image
+  scraper_image = module.ecr_build.scraper_image
+
+  sqs_queue_url = module.sqs.scraper_sqs_queue_url
+  
   
   depends_on = [module.ecr_build]
 }
