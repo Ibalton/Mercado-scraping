@@ -42,6 +42,9 @@ class API():
             self.session.execute(text("SELECT 1"))
             logger.info("✅ Database connection successful")
             
+            # Initialize database tables
+            self.initialize_database()
+            
         except Exception as e:
             logger.error(f"❌ Database connection failed: {e}")
             # Initialize session anyway for health checks
@@ -57,6 +60,104 @@ class API():
             logger.error(f"❌ Error type: {type(e).__name__}")
             logger.error(f"❌ Full traceback: {traceback.format_exc()}")
             self.model = None
+
+    def initialize_database(self):
+        """
+        Initialize database tables and basic data
+        """
+        try:
+            # Enable pgvector extension
+            self.enable_pgvector_extension()
+            
+            # Create required enum types
+            self.create_enum_types()
+            
+            # Create all tables
+            Base.metadata.create_all(self.engine)
+            logger.info("✅ Database tables created successfully")
+            
+            # Check if basic data exists, if not create it
+            self.create_basic_data()
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize database: {e}")
+            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+            raise e
+
+    def create_enum_types(self):
+        """
+        Create required enum types for the database
+        """
+        try:
+            # Create query_frequency enum type
+            result = self.session.execute(text(
+                "SELECT 1 FROM pg_type WHERE typname = 'query_frequency'"
+            )).fetchone()
+            
+            if not result:
+                self.session.execute(text("""
+                    CREATE TYPE query_frequency AS ENUM (
+                        'hourly', 'daily', 'weekly', 'monthly'
+                    )
+                """))
+                self.session.commit()
+                logger.info("✅ Created query_frequency enum type")
+            else:
+                logger.info("✅ query_frequency enum type already exists")
+                
+        except Exception as e:
+            logger.error(f"❌ Failed to create enum types: {e}")
+            self.session.rollback()
+            raise e
+
+    def enable_pgvector_extension(self):
+        """
+        Enable the pgvector extension required for vector operations
+        """
+        try:
+            # Check if extension exists
+            result = self.session.execute(text(
+                "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
+            )).fetchone()
+            
+            if not result:
+                # Enable the extension
+                self.session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                self.session.commit()
+                logger.info("✅ pgvector extension enabled")
+            else:
+                logger.info("✅ pgvector extension already enabled")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Could not enable pgvector extension: {e}")
+            logger.warning("Please ensure pgvector is installed in your PostgreSQL instance")
+            # Don't raise the exception as the rest of the app might still work
+            self.session.rollback()
+
+    def create_basic_data(self):
+        """
+        Create basic required data like marketplaces
+        """
+        try:
+            # Check if MercadoLibre marketplace exists
+            ml_marketplace = self.session.query(Marketplaces).filter(
+                Marketplaces.name == 'MercadoLibre'
+            ).first()
+            
+            if not ml_marketplace:
+                ml_marketplace = Marketplaces(
+                    name='MercadoLibre',
+                    region='Argentina',
+                    domain='mercadolibre.com.ar'
+                )
+                self.session.add(ml_marketplace)
+                self.session.commit()
+                logger.info("✅ Created MercadoLibre marketplace entry")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to create basic data: {e}")
+            self.session.rollback()
+            raise e
 
     def safe_commit(self):
         """
@@ -132,12 +233,14 @@ class API():
                         ClientQueries.pages_to_scrape,
                         ClientQueries.frequency,
                         Queries.created_at,
-                        Queries.removed_at
+                        Queries.removed_at,
+                        Queries.id
                     )
                 )
             else:
                 queries = (
-                    queries.join(ClientQueries.Client)
+                    queries.join(ClientQueries)
+                    .join(Clients)
                     .filter(Clients.email == client_email)
                     .with_entities(
                         Queries.query_text,
