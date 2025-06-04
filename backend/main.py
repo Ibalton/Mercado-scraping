@@ -6,18 +6,11 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import asyncio
 
-# Initialize API at startup
+
 api = API()
 
-""" @asynccontextmanager
-async def lifespan(app: FastAPI):
-    print("🚀 Starting up...")
-    yield  # App runs here
-    print("🔻 Shutting down...")
-    global api
-    del api
- """
 app = FastAPI()
+
 
 app.add_middleware(
     CORSMiddleware,

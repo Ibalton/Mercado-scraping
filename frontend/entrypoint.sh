@@ -12,4 +12,4 @@ find /srv -name '*.js' -exec \
 echo "✅ Token replacement complete"
 echo "🚀 Starting static file server..."
 
-exec serve -s . -l 5173 
+exec serve -s . -l 80

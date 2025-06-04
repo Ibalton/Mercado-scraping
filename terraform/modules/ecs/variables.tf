@@ -28,12 +28,12 @@ variable "aws_region" {
   type        = string
 }
 
-variable "backend_task_definition_arn" {
-  description = "ARN of the backend task definition from ECR build module"
+variable "backend_image" {
+  description = "Backend Docker image URI with immutable tag"
   type        = string
 }
 
-variable "frontend_task_definition_arn" {
-  description = "ARN of the frontend task definition from ECR build module"
+variable "frontend_image" {
+  description = "Frontend Docker image URI with immutable tag"
   type        = string
 } 

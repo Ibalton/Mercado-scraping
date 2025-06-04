@@ -35,16 +35,4 @@ variable "cleanup_local_images" {
   description = "Whether to cleanup local Docker images after pushing"
   type        = bool
   default     = true
-}
-
-variable "database_url" {
-  description = "Database URL for backend"
-  type        = string
-  default     = ""
-}
-
-variable "backend_api_url" {
-  description = "Backend API URL for frontend"
-  type        = string
-  default     = ""
 } 

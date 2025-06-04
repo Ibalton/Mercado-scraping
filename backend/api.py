@@ -24,6 +24,8 @@ def serialize_model(model):
 class API():
     def __init__(self):
         DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg2://postgres:secret@db:5432/postgres")
+        if DATABASE_URL.startswith("postgres://"):
+            DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://")
         print(f"Using DATABASE_URL: {DATABASE_URL}")
         
         try:

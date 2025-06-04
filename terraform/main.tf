@@ -21,26 +21,11 @@ module "ec2" {
 }
 
 module "rds" {
-  source                 = "./modules/rds"
-  db_subnet_group        = module.vpc.db_subnet_group
-  vpc_security_group_ids = [module.ec2.db_sg_id]
+  source             = "./modules/rds"
+  vpc_id             = module.vpc.vpc_id
+  ecs_tasks_sg_id    = module.ecs.ecs_tasks_sg_id
+  db_subnet_group    = module.vpc.db_subnet_group
   private_subnet_ids = module.vpc.private_subnet_ids
-}
-
-module "ecs" {
-  source              = "./modules/ecs"
-  vpc_id              = module.vpc.vpc_id
-  public_subnet_ids   = module.vpc.public_subnet_ids
-  private_subnet_ids  = module.vpc.private_subnet_ids
-  ecr_repository_url  = module.ecr.ecr_repo_url
-  database_url        = module.rds.database_url
-  aws_region          = var.aws_region
-  
-  # Use task definitions from ECR build module with immutable tags
-  backend_task_definition_arn  = module.ecr_build.backend_task_definition_arn
-  frontend_task_definition_arn = module.ecr_build.frontend_task_definition_arn
-  
-  depends_on = [module.ecr_build]
 }
 
 module "ecr_build" {
@@ -53,11 +38,23 @@ module "ecr_build" {
   project_root       = ".."                  # Parent directory with backend/frontend folders
   auto_build_images  = true                  # Enable building!
   
-  # Environment variables for containers
-  database_url       = module.rds.database_url
-  backend_api_url    = "http://localhost:8000"  # Will be updated after ALB is created
-  
   depends_on = [module.ecr]
+}
+
+module "ecs" {
+  source              = "./modules/ecs"
+  vpc_id              = module.vpc.vpc_id
+  public_subnet_ids   = module.vpc.public_subnet_ids
+  private_subnet_ids  = module.vpc.private_subnet_ids
+  ecr_repository_url  = module.ecr.ecr_repo_url
+  database_url        = module.rds.database_url
+  aws_region          = var.aws_region
+  
+  # Use image URIs from ECR build module with immutable tags
+  backend_image  = module.ecr_build.backend_image
+  frontend_image = module.ecr_build.frontend_image
+  
+  depends_on = [module.ecr_build]
 }
 
 # ECS-related outputs

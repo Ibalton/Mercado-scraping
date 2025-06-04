@@ -72,92 +72,83 @@ resource "aws_cloudwatch_log_group" "frontend" {
 }
 
 # Backend Task Definition
-# COMMENTED OUT - Now using task definitions from ecr_build module with immutable tags
-# resource "aws_ecs_task_definition" "backend" {
-#   family                   = "mercado-backend"
-#   requires_compatibilities = ["FARGATE"]
-#   network_mode             = "awsvpc"
-#   cpu                      = "256"
-#   memory                   = "512"
-#   execution_role_arn       = data.aws_iam_role.lab_role.arn
-#   task_role_arn           = data.aws_iam_role.lab_role.arn
+resource "aws_ecs_task_definition" "backend" {
+  family                   = "mercado-backend"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 256
+  memory                   = 512
+  execution_role_arn       = data.aws_iam_role.lab_role.arn
+  task_role_arn            = data.aws_iam_role.lab_role.arn
 
-#   container_definitions = jsonencode([
-#     {
-#       name  = "backend"
-#       image = "${var.ecr_repository_url}:backend-latest"
+  container_definitions = jsonencode([
+    {
+      name  = "backend"
+      image = var.backend_image      # ⬅ the immutable tag
+      essential = true
       
-#       portMappings = [
-#         {
-#           containerPort = 8000
-#           protocol      = "tcp"
-#         }
-#       ]
+      portMappings = [
+        {
+          containerPort = 8000
+          protocol      = "tcp"
+        }
+      ]
       
-#       environment = [
-#         {
-#           name  = "DATABASE_URL"
-#           value = var.database_url
-#         }
-#       ]
+      environment = [
+        {
+          name  = "DATABASE_URL"
+          value = var.database_url
+        }
+      ]
       
-#       logConfiguration = {
-#         logDriver = "awslogs"
-#         options = {
-#           "awslogs-group"         = aws_cloudwatch_log_group.backend.name
-#           "awslogs-region"        = var.aws_region
-#           "awslogs-stream-prefix" = "ecs"
-#         }
-#       }
-      
-#       essential = true
-#     }
-#   ])
-# }
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.backend.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+    }
+  ])
+}
 
 # Frontend Task Definition
-# COMMENTED OUT - Now using task definitions from ecr_build module with immutable tags
-# resource "aws_ecs_task_definition" "frontend" {
-#   family                   = "mercado-frontend"
-#   requires_compatibilities = ["FARGATE"]
-#   network_mode             = "awsvpc"
-#   cpu                      = "256"
-#   memory                   = "512"
-#   execution_role_arn       = data.aws_iam_role.lab_role.arn
-#   task_role_arn           = data.aws_iam_role.lab_role.arn
+resource "aws_ecs_task_definition" "frontend" {
+  family                   = "mercado-frontend"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu    = 256
+  memory = 512
+  execution_role_arn = data.aws_iam_role.lab_role.arn
+  task_role_arn      = data.aws_iam_role.lab_role.arn
 
-#   container_definitions = jsonencode([
-#     {
-#       name  = "frontend"
-#       image = "${var.ecr_repository_url}:frontend-latest"
-      
-#       portMappings = [
-#         {
-#           containerPort = 5173
-#           protocol      = "tcp"
-#         }
-#       ]
-      
-#       environment = [
-#         {
-#           name  = "VITE_API_URL"
-#           value = "http://${aws_lb.main.dns_name}:8000"
-#         }
-#       ]
-      
-#       logConfiguration = {
-#         logDriver = "awslogs"
-#         options = {
-#           "awslogs-group"         = aws_cloudwatch_log_group.frontend.name
-#           "awslogs-region"        = var.aws_region
-#           "awslogs-stream-prefix" = "ecs"
-#         }
-#       }
-      
-#       essential = true
-#     }
-#   ])
-# }
+  container_definitions = jsonencode([
+    {
+      name  = "frontend"
+      image = var.frontend_image      # ⬅ the immutable tag
+      essential = true
+
+      portMappings = [{ containerPort = 80 }]
+
+      environment = [
+        {
+          name  = "VITE_API_URL"
+          value = "http://${aws_lb.main.dns_name}:8000"   # runtime value
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.frontend.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+    }
+  ])
+}
 
 # Application Load Balancer
 resource "aws_lb" "main" {
@@ -268,7 +259,7 @@ resource "aws_lb_listener" "backend" {
 resource "aws_ecs_service" "backend" {
   name            = "mercado-backend-service"
   cluster         = aws_ecs_cluster.mercado_cluster.id
-  task_definition = var.backend_task_definition_arn
+  task_definition = aws_ecs_task_definition.backend.arn
   desired_count   = 1
   launch_type     = "FARGATE"
 
@@ -284,7 +275,7 @@ resource "aws_ecs_service" "backend" {
     container_port   = 8000
   }
 
-  health_check_grace_period_seconds = 600  # 10 minutes for startup
+  health_check_grace_period_seconds = 1800   # 30 min
 
   depends_on = [aws_lb_listener.backend]
 }
@@ -292,7 +283,7 @@ resource "aws_ecs_service" "backend" {
 resource "aws_ecs_service" "frontend" {
   name            = "mercado-frontend-service"
   cluster         = aws_ecs_cluster.mercado_cluster.id
-  task_definition = var.frontend_task_definition_arn
+  task_definition = aws_ecs_task_definition.frontend.arn
   desired_count   = 1
   launch_type     = "FARGATE"
 

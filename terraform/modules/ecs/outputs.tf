@@ -8,6 +8,11 @@ output "ecs_cluster_name" {
   value       = aws_ecs_cluster.mercado_cluster.name
 }
 
+output "ecs_tasks_sg_id" {
+  description = "Security group ID of the ECS tasks"
+  value       = aws_security_group.ecs_tasks.id
+}
+
 output "backend_service_name" {
   description = "Name of the backend ECS service"
   value       = aws_ecs_service.backend.name
