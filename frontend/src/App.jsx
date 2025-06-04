@@ -1,6 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axiosClient from './axiosClient'; // Import your custom axios instance
 import 'bootstrap/dist/css/bootstrap.min.css';
+
+// Add CSS for lighter placeholder text
+const placeholderStyles = `
+  .form-control::placeholder,
+  .form-select::placeholder {
+    color: #bbb !important;
+    opacity: 1;
+  }
+  
+  .form-control::-webkit-input-placeholder,
+  .form-select::-webkit-input-placeholder {
+    color: #bbb !important;
+  }
+  
+  .form-control::-moz-placeholder,
+  .form-select::-moz-placeholder {
+    color: #bbb !important;
+    opacity: 1;
+  }
+  
+  .form-control:-ms-input-placeholder,
+  .form-select:-ms-input-placeholder {
+    color: #bbb !important;
+  }
+
+  /* Eliminate horizontal gutters */
+  .row,
+  [class*='col-'] {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+`;
 
 function App() {
   // "create", "view", "results", "client"
@@ -10,6 +44,7 @@ function App() {
 
   const [results, setResults] = useState([]);
   const [queryId, setQueryId] = useState('');
+  const [clients, setClients] = useState([]);
 
   // For Query Posting and Viewing
   const [queryForm, setQueryForm] = useState({
@@ -34,6 +69,27 @@ function App() {
   const handleClientChange = (e) => {
     setClientForm({ ...clientForm, [e.target.name]: e.target.value });
   };
+
+  // Fetch all clients
+  const fetchClients = async () => {
+    try {
+      console.log('Fetching clients...');
+      const response = await axiosClient.get('/client');
+      console.log('Clients response:', response.data);
+      setClients(response.data);
+      if (response.data.length === 0) {
+        setMessage('⚠️ No clients found. Please create a client first.');
+      }
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+      setMessage('❌ Error fetching clients: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
+  // Load clients when component mounts
+  useEffect(() => {
+    fetchClients();
+  }, []);
 
   // Trigger scraping by posting to the endpoint
   const handleTriggerScrape = async () => {
@@ -88,6 +144,10 @@ function App() {
       const data = response.data;
       if (data.message) {
         setMessage('✅ ' + data.message);
+        // Clear the form
+        setClientForm({ client_name: '', client_email: '' });
+        // Refresh the clients list
+        fetchClients();
       } else {
         setMessage('❌ ' + (data.detail || data.error));
       }
@@ -112,237 +172,521 @@ function App() {
   };
 
   return (
-    <div className="container py-5">
-      {/* Header with title and Trigger Scrape button */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-      <h1 className="text-center mb-4">Mercado Scrape</h1>
-        {/* <button className="btn btn-danger" onClick={handleTriggerScrape}>
-          Trigger Scrape
-        </button> */}
-      </div>
-
-      {/* View Selector */}
-      <div className="mb-4 d-flex justify-content-center">
-        <button 
-          className={`btn me-2 ${view === 'create' ? 'btn-primary' : 'btn-outline-primary'}`} 
-          onClick={() => setView('create')}
-        >
-          ➕ Create Query
-        </button>
-        <button 
-          className={`btn me-2 ${view === 'view' ? 'btn-primary' : 'btn-outline-primary'}`} 
-          onClick={() => { 
-            setView('view');
-            fetchQueries();
-          }}
-        >
-          📋 View Queries
-        </button>
-        <button 
-          className={`btn me-2 ${view === 'results' ? 'btn-primary' : 'btn-outline-primary'}`} 
-          onClick={() => setView('results')}
-        >
-          📦 View Results
-        </button>
-        <button 
-          className={`btn ${view === 'client' ? 'btn-primary' : 'btn-outline-primary'}`} 
-          onClick={() => setView('client')}
-        >
-          📝 Create Client
-        </button>
-      </div>
-
-      {/* Message Alert */}
-      {message && <div className="alert alert-info">{message}</div>}
-
-      {/* Create Query Form */}
-      {view === 'create' && (
-        <form onSubmit={handleQuerySubmit}>
-          <div className="row g-3">
-            <div className="col-md-6">
-              <input 
-                type="text" 
-                className="form-control" 
-                name="query_text" 
-                placeholder="Query Text" 
-                onChange={handleQueryChange} 
-                required 
-              />
-            </div>
-            <div className="col-md-3">
-              <input 
-                type="number" 
-                className="form-control" 
-                name="client_id" 
-                placeholder="Client ID" 
-                onChange={handleQueryChange} 
-                required 
-              />
-            </div>
-            <div className="col-md-3">
-              <input 
-                type="text" 
-                className="form-control" 
-                name="frequency" 
-                placeholder="Frequency" 
-                onChange={handleQueryChange} 
-                required 
-              />
-            </div>
-            <div className="col-md-3">
-              <input 
-                type="number" 
-                className="form-control" 
-                name="pages_to_scrape" 
-                placeholder="Pages to Scrape" 
-                onChange={handleQueryChange} 
-                required 
-              />
+    <div style={{ 
+      backgroundColor: '#fff159', 
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #fff159 0%, #ffeb3b 50%, #fdd835 100%)',
+      width: '100vw',
+      overflowX: 'hidden'
+    }}>
+      {/* Inject placeholder styles */}
+      <style>{placeholderStyles}</style>
+      {/* Header Section */}
+      <div style={{ 
+        backgroundColor: '#3483fa', 
+        boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+        marginBottom: '30px'
+      }}>
+        <div className="container-fluid py-4 px-4">
+          <div className="d-flex justify-content-between align-items-center">
+            <div>
+              <h1 style={{ 
+                color: 'white', 
+                fontWeight: 'bold', 
+                fontSize: '2.5rem',
+                margin: 0,
+                textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
+              }}>
+                🛒 Mercado Scrape
+              </h1>
+              <p style={{ 
+                color: '#e3f2fd', 
+                margin: 0, 
+                fontSize: '1.1rem' 
+              }}>
+                Tu herramienta de análisis de precios
+              </p>
             </div>
           </div>
-          <button className="btn btn-success mt-3" type="submit">Submit Query</button>
-        </form>
-      )}
+        </div>
+      </div>
 
-      {/* View Queries */}
-      {view === 'view' && (
-        <>
-          <h3 className="mt-4">Existing Queries for Client</h3>
-          <div className="row mb-3">
-            <div className="col-md-3">
-              <input 
-                type="number" 
-                className="form-control" 
-                name="client_id" 
-                placeholder="Enter Client ID" 
-                value={queryForm.client_id} 
-                onChange={handleQueryChange} 
-              />
-            </div>
-            <div className="col-md-3">
-              <button className="btn btn-secondary" onClick={fetchQueries}>
-                🔍 Load Queries
+      <div className="container-fluid pb-5 px-0">
+        {/* Navigation Cards */}
+        <div className="row mb-4">
+          <div className="col-12">
+            <div className="d-flex justify-content-center flex-wrap gap-3">
+              <button 
+                className={`btn btn-lg px-4 py-3 rounded-pill shadow-sm ${
+                  view === 'create' 
+                    ? 'btn-primary text-white' 
+                    : 'btn-light border-2'
+                }`}
+                style={{ 
+                  fontWeight: '600',
+                  transition: 'all 0.3s ease',
+                  border: view === 'create' ? '2px solid #3483fa' : '2px solid #ddd'
+                }} 
+                onClick={() => setView('create')}
+              >
+                ➕ Crear Consulta
+              </button>
+              <button 
+                className={`btn btn-lg px-4 py-3 rounded-pill shadow-sm ${
+                  view === 'view' 
+                    ? 'btn-primary text-white' 
+                    : 'btn-light border-2'
+                }`}
+                style={{ 
+                  fontWeight: '600',
+                  transition: 'all 0.3s ease',
+                  border: view === 'view' ? '2px solid #3483fa' : '2px solid #ddd'
+                }} 
+                onClick={() => { 
+                  setView('view');
+                  fetchQueries();
+                }}
+              >
+                📋 Ver Consultas
+              </button>
+              <button 
+                className={`btn btn-lg px-4 py-3 rounded-pill shadow-sm ${
+                  view === 'results' 
+                    ? 'btn-primary text-white' 
+                    : 'btn-light border-2'
+                }`}
+                style={{ 
+                  fontWeight: '600',
+                  transition: 'all 0.3s ease',
+                  border: view === 'results' ? '2px solid #3483fa' : '2px solid #ddd'
+                }} 
+                onClick={() => setView('results')}
+              >
+                📦 Ver Resultados
+              </button>
+              <button 
+                className={`btn btn-lg px-4 py-3 rounded-pill shadow-sm ${
+                  view === 'client' 
+                    ? 'btn-primary text-white' 
+                    : 'btn-light border-2'
+                }`}
+                style={{ 
+                  fontWeight: '600',
+                  transition: 'all 0.3s ease',
+                  border: view === 'client' ? '2px solid #3483fa' : '2px solid #ddd'
+                }} 
+                onClick={() => setView('client')}
+              >
+                👤 Crear Cliente
               </button>
             </div>
           </div>
-          <ul className="list-group">
-            {queries.length === 0 ? (
-              <li className="list-group-item">No queries found.</li>
-            ) : (
-              queries.map((q, index) => (
-                <li key={index} className="list-group-item">
-                  <strong>{q.query_text}</strong> | Client ID: {q.client_id}, Frequency: {q.frequency}, Pages: {q.pages_to_scrape}
-                </li>
-              ))
-            )}
-          </ul>
-        </>
-      )}
+        </div>
 
-      {/* View Results */}
-      {view === 'results' && (
-        <>
-          <h3 className="mt-4">Product Results for Query</h3>
-          <div className="row mb-3">
-            <div className="col-md-3">
-              <input 
-                type="number" 
-                className="form-control" 
-                placeholder="Enter Query ID" 
-                value={queryId} 
-                onChange={(e) => setQueryId(e.target.value)} 
-              />
-            </div>
-            <div className="col-md-3">
-              <button className="btn btn-secondary" onClick={fetchResults}>
-                📥 Load Results
-              </button>
-            </div>
-          </div>
-
-          <div className="row">
-            {results.length === 0 ? (
-              <div className="col-12">
-                <p>No results found.</p>
+        {/* Message Alert */}
+        {message && (
+          <div className="row mb-4">
+            <div className="col-12">
+              <div className="alert alert-info shadow-sm border-0 rounded-3" style={{
+                backgroundColor: message.includes('✅') ? '#d4edda' : message.includes('❌') ? '#f8d7da' : '#d1ecf1',
+                color: message.includes('✅') ? '#155724' : message.includes('❌') ? '#721c24' : '#0c5460',
+                fontSize: '1.1rem',
+                fontWeight: '500'
+              }}>
+                {message}
               </div>
-            ) : (
-              results.map((r, index) => (
-                <div key={index} className="col-md-4 mb-4">
-                  <div className="card h-100 shadow-sm">
-                  {console.log(r)}
-                    <img 
-                      src={r.listings[0].img_url || 'https://via.placeholder.com/300x200?text=No+Image'} 
-                      className="card-img-top" 
-                      alt={r.title || r.id} 
-                      style={{ objectFit: 'cover', height: '200px' }}
-                    />
-                    <div className="card-body d-flex flex-column">
-                      <h5 className="card-title">{r.title || r.id}</h5>
-                      {r.listings && r.listings.length > 0 ? (
-                        r.listings.map((listing, idx) => {
-                          // Get the latest price from this listing's prices array
-                          const latestPrice = listing.prices && listing.prices.length > 0 
-                            ? listing.prices[listing.prices.length - 1] 
-                            : null;
-                          return (
-                            <div key={idx} className="d-flex justify-content-between align-items-center my-2">
-                              <span className="text-primary h5">
-                                ${latestPrice && latestPrice.price ? latestPrice.price.toLocaleString() : 'N/A'}
-                              </span>
-                              <a 
-                                href={listing.url || '#'} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="btn btn-warning"
-                              >
-                                Ver producto
-                              </a>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <p>No listings available.</p>
-                      )}
-                      <div className="mt-auto"></div>
+            </div>
+          </div>
+        )}
+
+        {/* Create Query Form */}
+        {view === 'create' && (
+          <div className="row justify-content-center">
+            <div className="col-12" style={{ maxWidth: '800px' }}>
+              <div className="card shadow-lg border-0 rounded-4" style={{ backgroundColor: 'white' }}>
+                <div className="card-header" style={{ 
+                  backgroundColor: '#3483fa', 
+                  color: 'white',
+                  fontWeight: '600',
+                  fontSize: '1.2rem',
+                  borderRadius: '1.5rem 1.5rem 0 0'
+                }}>
+                  ➕ Crear Nueva Consulta de Productos
+                </div>
+                <div className="card-body p-4">
+                  <form onSubmit={handleQuerySubmit}>
+                    <div className="row g-3">
+                      <div className="col-md-12">
+                        <label className="form-label fw-bold" style={{ color: '#666' }}>
+                          Texto de búsqueda
+                        </label>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-lg rounded-3" 
+                          name="query_text" 
+                          placeholder="ej: iPhone 15 Pro Max" 
+                          onChange={handleQueryChange} 
+                          required
+                          style={{ border: '2px solid #e0e0e0', fontSize: '1.1rem' }}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label fw-bold" style={{ color: '#666' }}>
+                          Seleccionar Cliente
+                        </label>
+                        <select 
+                          className="form-select form-select-lg rounded-3" 
+                          name="client_id" 
+                          value={queryForm.client_id}
+                          onChange={handleQueryChange} 
+                          required
+                          style={{ border: '2px solid #e0e0e0', fontSize: '1.1rem' }}
+                        >
+                          <option value="">Selecciona un cliente...</option>
+                          {clients.map((client) => (
+                            <option key={client.id} value={client.id}>
+                              ID: {client.id} - {client.name} ({client.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label fw-bold" style={{ color: '#666' }}>
+                          Frecuencia
+                        </label>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-lg rounded-3" 
+                          name="frequency" 
+                          placeholder="daily" 
+                          onChange={handleQueryChange} 
+                          required
+                          style={{ border: '2px solid #e0e0e0', fontSize: '1.1rem' }}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label fw-bold" style={{ color: '#666' }}>
+                          Páginas a Escanear
+                        </label>
+                        <input 
+                          type="number" 
+                          className="form-control form-control-lg rounded-3" 
+                          name="pages_to_scrape" 
+                          placeholder="1" 
+                          onChange={handleQueryChange} 
+                          required
+                          style={{ border: '2px solid #e0e0e0', fontSize: '1.1rem' }}
+                        />
+                      </div>
+                    </div>
+                    <button 
+                      className="btn btn-success btn-lg mt-4 px-5 py-3 rounded-pill shadow" 
+                      type="submit"
+                      style={{ 
+                        fontWeight: '600',
+                        fontSize: '1.1rem',
+                        background: 'linear-gradient(45deg, #00a650, #00b956)',
+                        border: 'none'
+                      }}
+                    >
+                      🚀 Crear Consulta
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* View Queries */}
+        {view === 'view' && (
+          <div className="row justify-content-center">
+            <div className="col-12" style={{ maxWidth: '1000px' }}>
+              <div className="card shadow-lg border-0 rounded-4" style={{ backgroundColor: 'white' }}>
+                <div className="card-header" style={{ 
+                  backgroundColor: '#3483fa', 
+                  color: 'white',
+                  fontWeight: '600',
+                  fontSize: '1.2rem',
+                  borderRadius: '1.5rem 1.5rem 0 0'
+                }}>
+                  📋 Consultas Existentes
+                </div>
+                <div className="card-body p-4">
+                  <div className="row mb-4">
+                    <div className="col-md-4">
+                      <label className="form-label fw-bold" style={{ color: '#666' }}>
+                        Seleccionar Cliente
+                      </label>
+                      <select 
+                        className="form-select form-select-lg rounded-3" 
+                        name="client_id" 
+                        value={queryForm.client_id} 
+                        onChange={handleQueryChange}
+                        style={{ border: '2px solid #e0e0e0', fontSize: '1.1rem' }}
+                      >
+                        <option value="">Selecciona un cliente...</option>
+                        {clients.map((client) => (
+                          <option key={client.id} value={client.id}>
+                            ID: {client.id} - {client.name} ({client.email})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-md-4 d-flex align-items-end">
+                      <button 
+                        className="btn btn-primary btn-lg px-4 py-3 rounded-pill shadow" 
+                        onClick={fetchQueries}
+                        style={{ fontWeight: '600' }}
+                      >
+                        🔍 Cargar Consultas
+                      </button>
                     </div>
                   </div>
+                  
+                  <div className="row">
+                    {queries.length === 0 ? (
+                      <div className="col-12 text-center py-5">
+                        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📋</div>
+                        <h4 style={{ color: '#666' }}>No se encontraron consultas</h4>
+                        <p style={{ color: '#999' }}>Ingresa un ID de cliente válido para ver las consultas</p>
+                      </div>
+                    ) : (
+                      queries.map((q, index) => (
+                        <div key={index} className="col-md-6 mb-3">
+                          <div className="card border-0 shadow-sm rounded-3" style={{ 
+                            border: '1px solid #e0e0e0',
+                            transition: 'transform 0.2s ease'
+                          }}>
+                            <div className="card-body p-3">
+                              <div className="d-flex justify-content-between align-items-start mb-2">
+                                <h6 className="card-title text-primary fw-bold mb-0">
+                                  🔍 {q.query_text}
+                                </h6>
+                                <span className="badge bg-info text-dark fs-6 px-2 py-1 rounded-pill">
+                                  ID: {q.query_id}
+                                </span>
+                              </div>
+                              <div className="small text-muted">
+                                <div><strong>Cliente:</strong> {q.client_id}</div>
+                                <div><strong>Frecuencia:</strong> {q.frequency}</div>
+                                <div><strong>Páginas:</strong> {q.pages_to_scrape}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
-              ))
-            )}
+              </div>
+            </div>
           </div>
-        </>
-      )}
+        )}
 
-      {/* Create Client Form */}
-      {view === 'client' && (
-        <form onSubmit={handleClientSubmit}>
-          <div className="row g-3">
-            <div className="col-md-6">
-              <input 
-                type="text" 
-                className="form-control" 
-                name="client_name" 
-                placeholder="Client Name" 
-                value={clientForm.client_name}
-                onChange={handleClientChange} 
-                required 
-              />
-            </div>
-            <div className="col-md-6">
-              <input 
-                type="email" 
-                className="form-control" 
-                name="client_email" 
-                placeholder="Client Email" 
-                value={clientForm.client_email}
-                onChange={handleClientChange} 
-                required 
-              />
+        {/* View Results */}
+        {view === 'results' && (
+          <div className="row justify-content-center">
+            <div className="col-12" style={{ maxWidth: '1200px' }}>
+              <div className="card shadow-lg border-0 rounded-4" style={{ backgroundColor: 'white' }}>
+                <div className="card-header" style={{ 
+                  backgroundColor: '#3483fa', 
+                  color: 'white',
+                  fontWeight: '600',
+                  fontSize: '1.2rem',
+                  borderRadius: '1.5rem 1.5rem 0 0'
+                }}>
+                  📦 Resultados de Productos
+                </div>
+                <div className="card-body p-4">
+                  <div className="row mb-4">
+                    <div className="col-md-8">
+                      <label className="form-label fw-bold" style={{ color: '#666' }}>
+                        ID de la Consulta
+                      </label>
+                      <input 
+                        type="number" 
+                        className="form-control form-control-lg rounded-3" 
+                        placeholder="Ej: 123 (ver en 'Ver Consultas')" 
+                        value={queryId} 
+                        onChange={(e) => setQueryId(e.target.value)}
+                        style={{ border: '2px solid #e0e0e0', fontSize: '1.1rem' }}
+                      />
+                      <small className="text-muted mt-1">
+                        💡 Puedes encontrar el ID en la sección "Ver Consultas"
+                      </small>
+                    </div>
+                    <div className="col-md-4 d-flex align-items-end">
+                      <button 
+                        className="btn btn-primary btn-lg px-4 py-3 rounded-pill shadow w-100" 
+                        onClick={fetchResults}
+                        style={{ fontWeight: '600' }}
+                      >
+                        📥 Cargar Resultados
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="row">
+                    {results.length === 0 ? (
+                      <div className="col-12 text-center py-5">
+                        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📦</div>
+                        <h4 style={{ color: '#666' }}>No se encontraron resultados</h4>
+                        <p style={{ color: '#999' }}>Ingresa un ID de consulta válido para ver los productos</p>
+                      </div>
+                    ) : (
+                      results.map((r, index) => (
+                        <div key={index} className="col-md-6 mb-3">
+                          <div className="card border-0 shadow-sm rounded-3" style={{ 
+                            border: '1px solid #e0e0e0',
+                            transition: 'transform 0.2s ease'
+                          }}>
+                            <div className="card-body p-3">
+                              <div className="row">
+                                <div className="col-4">
+                                  <img 
+                                    src={r.listings[0]?.img_url || 'https://via.placeholder.com/120x120?text=Sin+Imagen'} 
+                                    alt={r.title || r.id} 
+                                    style={{ 
+                                      width: '100%',
+                                      height: '120px',
+                                      objectFit: 'cover',
+                                      borderRadius: '8px'
+                                    }}
+                                  />
+                                </div>
+                                <div className="col-8">
+                                  <div className="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 className="card-title text-primary fw-bold mb-0" style={{
+                                      fontSize: '0.9rem',
+                                      lineHeight: '1.2',
+                                      overflow: 'hidden',
+                                      display: '-webkit-box',
+                                      WebkitLineClamp: 2,
+                                      WebkitBoxOrient: 'vertical'
+                                    }}>
+                                      🛍️ {r.title || `Producto ${r.id}`}
+                                    </h6>
+                                  </div>
+                                  <div className="small text-muted mb-2">
+                                    {r.listings && r.listings.length > 0 ? (
+                                      r.listings.map((listing, idx) => {
+                                        const latestPrice = listing.prices && listing.prices.length > 0 
+                                          ? listing.prices[listing.prices.length - 1] 
+                                          : null;
+                                        return (
+                                          <div key={idx} className="mb-2 pb-2" style={{ borderBottom: idx < r.listings.length - 1 ? '1px solid #eee' : 'none' }}>
+                                            <div className="d-flex justify-content-between align-items-center">
+                                              <div>
+                                                <div><strong>Precio:</strong> ${latestPrice && latestPrice.price ? latestPrice.price.toLocaleString() : 'N/A'}</div>
+                                                <div><strong>Tienda:</strong> MercadoLibre</div>
+                                              </div>
+                                              <div>
+                                                <a 
+                                                  href={listing.url || '#'} 
+                                                  target="_blank" 
+                                                  rel="noopener noreferrer" 
+                                                  className="btn btn-warning btn-sm rounded-pill px-2 py-1"
+                                                  style={{ 
+                                                    fontWeight: '600',
+                                                    fontSize: '0.7rem',
+                                                    backgroundColor: '#fff159',
+                                                    border: '1px solid #f57c00',
+                                                    color: '#333'
+                                                  }}
+                                                >
+                                                  Ver
+                                                </a>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })
+                                    ) : (
+                                      <div>Sin información de precio</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <button className="btn btn-success mt-3" type="submit">Create Client</button>
-        </form>
-      )}
+        )}
+
+        {/* Create Client Form */}
+        {view === 'client' && (
+          <div className="row justify-content-center">
+            <div className="col-12" style={{ maxWidth: '600px' }}>
+              <div className="card shadow-lg border-0 rounded-4" style={{ backgroundColor: 'white' }}>
+                <div className="card-header" style={{ 
+                  backgroundColor: '#3483fa', 
+                  color: 'white',
+                  fontWeight: '600',
+                  fontSize: '1.2rem',
+                  borderRadius: '1.5rem 1.5rem 0 0'
+                }}>
+                  👤 Crear Nuevo Cliente
+                </div>
+                <div className="card-body p-4">
+                  <form onSubmit={handleClientSubmit}>
+                    <div className="row g-3">
+                      <div className="col-12">
+                        <label className="form-label fw-bold" style={{ color: '#666' }}>
+                          Nombre del Cliente
+                        </label>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-lg rounded-3" 
+                          name="client_name" 
+                          placeholder="ej: Juan Pérez" 
+                          value={clientForm.client_name}
+                          onChange={handleClientChange} 
+                          required
+                          style={{ border: '2px solid #e0e0e0', fontSize: '1.1rem' }}
+                        />
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label fw-bold" style={{ color: '#666' }}>
+                          Email del Cliente
+                        </label>
+                        <input 
+                          type="email" 
+                          className="form-control form-control-lg rounded-3" 
+                          name="client_email" 
+                          placeholder="ej: juan@email.com" 
+                          value={clientForm.client_email}
+                          onChange={handleClientChange} 
+                          required
+                          style={{ border: '2px solid #e0e0e0', fontSize: '1.1rem' }}
+                        />
+                      </div>
+                    </div>
+                    <button 
+                      className="btn btn-success btn-lg mt-4 px-5 py-3 rounded-pill shadow w-100" 
+                      type="submit"
+                      style={{ 
+                        fontWeight: '600',
+                        fontSize: '1.1rem',
+                        background: 'linear-gradient(45deg, #00a650, #00b956)',
+                        border: 'none'
+                      }}
+                    >
+                      ✨ Crear Cliente
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -277,6 +277,17 @@ class API():
 
         return result
     
+    def get_all_clients(self):
+        """
+        Get all clients from the database
+        """
+        try:
+            clients = self.session.query(Clients).all()
+            return [serialize_model(client) for client in clients]
+        except Exception as e:
+            self.session.rollback()
+            raise e
+
     def create_client(self, client_name: str, client_email: str)->dict:
         try:
             client = self.session.query(Clients).filter(Clients.email == client_email).first()
