@@ -68,6 +68,17 @@ async def create_query(body: QueryRequest):
 class ClientRequest(BaseModel):
     client_name: str
     client_email: str
+@app.get("/client")
+async def get_all_clients():
+    """
+    Get all clients
+    """
+    try:
+        clients = api.get_all_clients()
+        return clients
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/client")
 async def create_client(body: ClientRequest):
     try:
