@@ -1,7 +1,7 @@
 import asyncio
 from models import *
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sentence_transformers import SentenceTransformer
@@ -23,11 +23,29 @@ def serialize_model(model):
 # Create a database engine
 class API():
     def __init__(self):
-        DATABASE_URL = "postgresql+psycopg2://postgres:secret@db:5432/postgres"  # ✅ should be using env var
-        print(DATABASE_URL)
-        self.engine = create_engine(DATABASE_URL)
-        self.session = sessionmaker(bind=self.engine)()
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg2://postgres:secret@db:5432/postgres")
+        print(f"Using DATABASE_URL: {DATABASE_URL}")
+        
+        try:
+            self.engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+            self.session = sessionmaker(bind=self.engine)()
+            
+            # Test the connection
+            self.session.execute(text("SELECT 1"))
+            print("✅ Database connection successful")
+            
+        except Exception as e:
+            print(f"❌ Database connection failed: {e}")
+            # Initialize session anyway for health checks
+            self.engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+            self.session = sessionmaker(bind=self.engine)()
+        
+        try:
+            self.model = SentenceTransformer('all-MiniLM-L6-v2')
+            print("✅ SentenceTransformer model loaded")
+        except Exception as e:
+            print(f"❌ Failed to load SentenceTransformer model: {e}")
+            self.model = None
 
     def safe_commit(self):
         """

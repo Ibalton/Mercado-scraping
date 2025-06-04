@@ -1,9 +1,9 @@
 // src/axiosClient.js
 import axios from 'axios';
 
-// You can use an environment variable (e.g., REACT_APP_BACKEND_URL) to manage the URL.
-// In .env file add: REACT_APP_BACKEND_URL=http://localhost:8000
-const backendUrl = 'http://localhost:8000';
+// VITE_API_URL is injected at runtime via entrypoint.sh
+// The build uses a placeholder token that gets replaced with the actual URL from ECS environment
+const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const axiosClient = axios.create({
   baseURL: backendUrl,

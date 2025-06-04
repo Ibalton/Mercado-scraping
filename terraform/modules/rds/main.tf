@@ -8,6 +8,7 @@ resource "aws_db_instance" "postgres" {
   engine             = "postgres"
   instance_class     = "db.t3.micro"
   allocated_storage  = 20
+  db_name            = "postgres"
   username           = "clouduser"
   password           = "replace_with_secret" # Use Secrets Manager or variables!
   db_subnet_group_name    = var.db_subnet_group
@@ -19,4 +20,10 @@ resource "aws_db_instance" "postgres" {
 
 output "rds_endpoint" {
   value = aws_db_instance.postgres.endpoint
+}
+
+output "database_url" {
+  description = "PostgreSQL connection URL for applications"
+  value       = "postgresql+psycopg2://${aws_db_instance.postgres.username}:${aws_db_instance.postgres.password}@${aws_db_instance.postgres.endpoint}/${aws_db_instance.postgres.db_name}"
+  sensitive   = true
 }

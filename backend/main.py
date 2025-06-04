@@ -5,7 +5,10 @@ from api import API
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import asyncio
+
+# Initialize API at startup
 api = API()
+
 """ @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🚀 Starting up...")
@@ -32,6 +35,13 @@ class QueryRequest(BaseModel):
     client_id: int
     frequency: str
     pages_to_scrape: int
+
+@app.get("/health")
+async def health_check():
+    print("🏥 Health check endpoint called")
+    health_status = {"status": "healthy", "message": "Service is running"}
+    print(f"🏥 Health check response: {health_status}")
+    return health_status
 
 @app.get("/")
 async def hello_world():
