@@ -76,8 +76,8 @@ resource "aws_ecs_task_definition" "backend" {
   family                   = "mercado-backend"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
+  cpu                      = 512
+  memory                   = 1024
   execution_role_arn       = data.aws_iam_role.lab_role.arn
   task_role_arn            = data.aws_iam_role.lab_role.arn
 
@@ -98,6 +98,10 @@ resource "aws_ecs_task_definition" "backend" {
         {
           name  = "DATABASE_URL"
           value = var.database_url
+        },
+        {
+          name  = "PYTHONUNBUFFERED"
+          value = "1"
         }
       ]
       

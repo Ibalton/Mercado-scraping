@@ -13,6 +13,12 @@ import os
 from dotenv import load_dotenv
 import os
 from sqlalchemy.orm import class_mapper
+import logging
+import traceback
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("api")
 
 def serialize_model(model):
     """
@@ -26,7 +32,7 @@ class API():
         DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg2://postgres:secret@db:5432/postgres")
         if DATABASE_URL.startswith("postgres://"):
             DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://")
-        print(f"Using DATABASE_URL: {DATABASE_URL}")
+        logger.info(f"Using DATABASE_URL: {DATABASE_URL}")
         
         try:
             self.engine = create_engine(DATABASE_URL, pool_pre_ping=True)
@@ -34,19 +40,22 @@ class API():
             
             # Test the connection
             self.session.execute(text("SELECT 1"))
-            print("✅ Database connection successful")
+            logger.info("✅ Database connection successful")
             
         except Exception as e:
-            print(f"❌ Database connection failed: {e}")
+            logger.error(f"❌ Database connection failed: {e}")
             # Initialize session anyway for health checks
             self.engine = create_engine(DATABASE_URL, pool_pre_ping=True)
             self.session = sessionmaker(bind=self.engine)()
         
         try:
+            # Log memory usage before loading model
             self.model = SentenceTransformer('all-MiniLM-L6-v2')
-            print("✅ SentenceTransformer model loaded")
+            logger.info(f"✅ SentenceTransformer model loaded successfully")
         except Exception as e:
-            print(f"❌ Failed to load SentenceTransformer model: {e}")
+            logger.error(f"❌ Failed to load SentenceTransformer model: {e}")
+            logger.error(f"❌ Error type: {type(e).__name__}")
+            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
             self.model = None
 
     def safe_commit(self):
@@ -374,15 +383,15 @@ class API():
         try:
             self.session.rollback()
         except Exception as e:
-            print(f"Error during rollback: {e}")
+            logger.error(f"Error during rollback: {e}")
         # Close the session and dispose of the engine
         try:
             self.session.close()
             self.engine.dispose()
         except Exception as e:
-            print(f"Error during session close: {e}")
+            logger.error(f"Error during session close: {e}")
 
-        print("Session closed and engine disposed.")
+        logger.info("Session closed and engine disposed.")
 
 
 

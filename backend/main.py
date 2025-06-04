@@ -5,7 +5,11 @@ from api import API
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import asyncio
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("main")
 
 api = API()
 
@@ -31,9 +35,9 @@ class QueryRequest(BaseModel):
 
 @app.get("/health")
 async def health_check():
-    print("🏥 Health check endpoint called")
+    logger.info("🏥 Health check endpoint called")
     health_status = {"status": "healthy", "message": "Service is running"}
-    print(f"🏥 Health check response: {health_status}")
+    logger.info(f"🏥 Health check response: {health_status}")
     return health_status
 
 @app.get("/")
@@ -50,13 +54,15 @@ async def get_query_results(query_id:int = Query(None)):
     return results
 @app.post("/query")
 async def create_query(body: QueryRequest):
-    print(body)
+    logger.info(f"Creating query: {body}")
     # Placeholder for query creation logic
     # Replace with actual query creation logic
     try:
         query = api.post_query(body.query_text, body.client_id, body.frequency, body.pages_to_scrape)
+        logger.info("Query created successfully")
         return {"message": "Query created successfully", "query": query}
     except Exception as e:
+        logger.error(f"Error creating query: {str(e)}")
         return {"error": str(e)}
     
 class ClientRequest(BaseModel):
@@ -73,10 +79,13 @@ async def create_client(body: ClientRequest):
 @app.post("/trigger-scrape")
 async def trigger_scrape():
     if tasks:
+        logger.info("Scrape already in progress")
         return {"message": "Scrape already in progress"}
+    logger.info("Triggering scrape")
     task = asyncio.create_task(api.scrape_all())
     task.add_done_callback(lambda t: tasks.pop() if tasks else None)
     tasks.append(task)
+    logger.info("Scrape triggered successfully")
     return {"message": "Scrape triggered successfully"}
 
 

@@ -1,5 +1,8 @@
 FROM python:3.11
 
+# Ensure Python doesn't buffer stdout/stderr in Docker containers
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 COPY requirements.txt .
