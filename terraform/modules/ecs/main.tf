@@ -161,7 +161,6 @@ resource "aws_ecs_task_definition" "frontend" {
   ])
 }
 
-
 resource "aws_ecs_task_definition" "scraper_task" {
   family                   = "mercado-scraper-task"
   requires_compatibilities = ["FARGATE"]
@@ -180,6 +179,18 @@ resource "aws_ecs_task_definition" "scraper_task" {
         {
           name  = "SQS_QUEUE_URL"
           value = var.sqs_queue_url
+        },
+        {
+          name  = "SQS_REGION"
+          value = var.sqs_region
+        },
+        {
+          name  = "DATABASE_URL"
+          value = var.database_url
+        },
+        {
+          name  = "PYTHONUNBUFFERED"
+          value = "1"
         }
       ],
       logConfiguration = {
@@ -346,3 +357,20 @@ resource "aws_ecs_service" "frontend" {
 
   depends_on = [aws_lb_listener.frontend]
 } 
+
+
+resource "aws_ecs_service" "scraper" {
+  name            = "mercado-scraper-service"
+  cluster         = aws_ecs_cluster.mercado_cluster.id
+  task_definition = aws_ecs_task_definition.scraper_task.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = var.private_subnet_ids
+    security_groups  = [aws_security_group.ecs_tasks.id]
+    assign_public_ip = false
+  }
+
+  # No external load balancer needed if the scraper just communicates with RDS
+}
