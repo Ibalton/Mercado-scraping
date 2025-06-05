@@ -53,3 +53,34 @@ variable "scraper_image" {
   description = "Scraper Docker image URI with immutable tag"
   type        = string
 } 
+
+# Meta-argument variables for scaling
+variable "backend_replicas" {
+  description = "Number of backend service replicas"
+  type        = number
+  default     = 1
+}
+
+variable "frontend_replicas" {
+  description = "Number of frontend service replicas"
+  type        = number
+  default     = 1
+}
+
+variable "scraper_replicas" {
+  description = "Number of scraper service replicas"
+  type        = number
+  default     = 1
+}
+
+variable "environment" {
+  description = "Environment name (dev, prod, etc.)"
+  type        = string
+  default     = "dev"
+}
+
+variable "default_tags" {
+  description = "Default tags to apply to all resources"
+  type        = map(string)
+  default     = {}
+} 

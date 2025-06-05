@@ -1,28 +1,36 @@
 # ECS Cluster
-
-
 resource "aws_ecs_cluster" "mercado_cluster" {
-  name = "mercado-scraper-cluster"
+  name = "${var.environment}-mercado-scraper-cluster"
 
   setting {
     name  = "containerInsights"
     value = "enabled"
   }
 
-  tags = {
-    Name = "mercado-scraper-cluster"
-  }
+  tags = local.common_tags
 }
 
 # Use existing IAM roles from AWS Learner Lab
-# Note: AWS Learner Lab provides pre-created roles that we can reference
 data "aws_iam_role" "lab_role" {
   name = "LabRole"
 }
 
+# Local values for common configurations
+locals {
+  # Function 4: merge for combining tags
+  common_tags = merge(
+    var.default_tags,
+    {
+      Environment = var.environment
+      ManagedBy   = "Terraform"
+      Project     = "mercado-scraper"
+    }
+  )
+}
+
 # Security Group for ECS Tasks
 resource "aws_security_group" "ecs_tasks" {
-  name        = "mercado-ecs-tasks"
+  name        = "${var.environment}-mercado-ecs-tasks"
   description = "Security group for ECS tasks"
   vpc_id      = var.vpc_id
 
@@ -57,30 +65,31 @@ resource "aws_security_group" "ecs_tasks" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "mercado-ecs-tasks"
-  }
+  tags = local.common_tags
 }
 
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "backend" {
-  name              = "/ecs/mercado-backend"
+  name              = "/ecs/${var.environment}-mercado-backend"
   retention_in_days = 7
+  tags              = local.common_tags
 }
 
 resource "aws_cloudwatch_log_group" "frontend" {
-  name              = "/ecs/mercado-frontend"
+  name              = "/ecs/${var.environment}-mercado-frontend"
   retention_in_days = 7
+  tags              = local.common_tags
 }
 
 resource "aws_cloudwatch_log_group" "scraper" {
-  name              = "/ecs/mercado-scraper"
+  name              = "/ecs/${var.environment}-mercado-scraper"
   retention_in_days = 7
+  tags              = local.common_tags
 }
 
 # Backend Task Definition
 resource "aws_ecs_task_definition" "backend" {
-  family                   = "mercado-backend"
+  family                   = "${var.environment}-mercado-backend"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 512
@@ -126,7 +135,7 @@ resource "aws_ecs_task_definition" "backend" {
 
 # Frontend Task Definition
 resource "aws_ecs_task_definition" "frontend" {
-  family                   = "mercado-frontend"
+  family                   = "${var.environment}-mercado-frontend"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu    = 256
@@ -162,7 +171,7 @@ resource "aws_ecs_task_definition" "frontend" {
 }
 
 resource "aws_ecs_task_definition" "scraper_task" {
-  family                   = "mercado-scraper-task"
+  family                   = "${var.environment}-mercado-scraper-task"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "512"
@@ -208,20 +217,20 @@ resource "aws_ecs_task_definition" "scraper_task" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "mercado-alb"
+  name               = "${var.environment}-mercado-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets           = var.public_subnet_ids
 
-  tags = {
-    Name = "mercado-alb"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${var.environment}-mercado-alb"
+  })
 }
 
 # ALB Security Group
 resource "aws_security_group" "alb" {
-  name        = "mercado-alb"
+  name        = "${var.environment}-mercado-alb"
   description = "Security group for ALB"
   vpc_id      = var.vpc_id
 
@@ -246,14 +255,14 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "mercado-alb"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${var.environment}-mercado-alb"
+  })
 }
 
 # Target Groups
 resource "aws_lb_target_group" "backend" {
-  name        = "mercado-backend-tg"
+  name        = "${var.environment}-mercado-backend-tg"
   port        = 8000
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -268,10 +277,12 @@ resource "aws_lb_target_group" "backend" {
     path                = "/health"
     matcher             = "200"
   }
+
+  tags = local.common_tags
 }
 
 resource "aws_lb_target_group" "frontend" {
-  name        = "mercado-frontend-tg"
+  name        = "${var.environment}-mercado-frontend-tg"
   port        = 80    # Updated to match ECR build task definition
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -286,6 +297,8 @@ resource "aws_lb_target_group" "frontend" {
     path                = "/"
     matcher             = "200"
   }
+
+  tags = local.common_tags
 }
 
 # ALB Listeners
@@ -311,12 +324,13 @@ resource "aws_lb_listener" "backend" {
   }
 }
 
-# ECS Services
+# ECS Services with count meta-argument
 resource "aws_ecs_service" "backend" {
-  name            = "mercado-backend-service"
+  count           = var.backend_replicas > 0 ? 1 : 0
+  name            = "${var.environment}-mercado-backend-service"
   cluster         = aws_ecs_cluster.mercado_cluster.id
   task_definition = aws_ecs_task_definition.backend.arn
-  desired_count   = 1
+  desired_count   = var.backend_replicas
   launch_type     = "FARGATE"
 
   network_configuration {
@@ -334,13 +348,16 @@ resource "aws_ecs_service" "backend" {
   health_check_grace_period_seconds = 1800   # 30 min
 
   depends_on = [aws_lb_listener.backend]
+
+  tags = local.common_tags
 }
 
 resource "aws_ecs_service" "frontend" {
-  name            = "mercado-frontend-service"
+  count           = var.frontend_replicas > 0 ? 1 : 0
+  name            = "${var.environment}-mercado-frontend-service"
   cluster         = aws_ecs_cluster.mercado_cluster.id
   task_definition = aws_ecs_task_definition.frontend.arn
-  desired_count   = 1
+  desired_count   = var.frontend_replicas
   launch_type     = "FARGATE"
 
   network_configuration {
@@ -356,14 +373,16 @@ resource "aws_ecs_service" "frontend" {
   }
 
   depends_on = [aws_lb_listener.frontend]
+
+  tags = local.common_tags
 } 
 
-
 resource "aws_ecs_service" "scraper" {
-  name            = "mercado-scraper-service"
+  count           = var.scraper_replicas > 0 ? 1 : 0
+  name            = "${var.environment}-mercado-scraper-service"
   cluster         = aws_ecs_cluster.mercado_cluster.id
   task_definition = aws_ecs_task_definition.scraper_task.arn
-  desired_count   = 1
+  desired_count   = var.scraper_replicas
   launch_type     = "FARGATE"
 
   network_configuration {

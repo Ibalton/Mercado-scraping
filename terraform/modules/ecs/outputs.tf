@@ -9,22 +9,27 @@ output "ecs_cluster_name" {
 }
 
 output "ecs_tasks_sg_id" {
-  description = "Security group ID of the ECS tasks"
+  description = "Security group ID for ECS tasks"
   value       = aws_security_group.ecs_tasks.id
 }
 
 output "backend_service_name" {
   description = "Name of the backend ECS service"
-  value       = aws_ecs_service.backend.name
+  value       = length(aws_ecs_service.backend) > 0 ? aws_ecs_service.backend[0].name : null
 }
 
 output "frontend_service_name" {
   description = "Name of the frontend ECS service"
-  value       = aws_ecs_service.frontend.name
+  value       = length(aws_ecs_service.frontend) > 0 ? aws_ecs_service.frontend[0].name : null
+}
+
+output "scraper_service_name" {
+  description = "Name of the scraper ECS service"
+  value       = length(aws_ecs_service.scraper) > 0 ? aws_ecs_service.scraper[0].name : null
 }
 
 output "load_balancer_dns_name" {
-  description = "DNS name of the Application Load Balancer"
+  description = "Load balancer DNS name"
   value       = aws_lb.main.dns_name
 }
 
@@ -41,4 +46,9 @@ output "backend_url" {
 output "frontend_url" {
   description = "Frontend application URL"
   value       = "http://${aws_lb.main.dns_name}"
+}
+
+output "load_balancer_arn_suffix" {
+  description = "ARN suffix of the load balancer for monitoring"
+  value       = aws_lb.main.arn_suffix
 } 

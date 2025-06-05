@@ -40,6 +40,12 @@ resource "aws_db_instance" "postgres" {
   publicly_accessible = false
   skip_final_snapshot = true
   multi_az = false
+
+  # Lifecycle meta-argument to prevent accidental destruction
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes  = [password]
+  }
 }
 
 output "rds_endpoint" {
