@@ -8,7 +8,7 @@ services:
       POSTGRES_DB: cloud
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./backend/db_dump.sql:/docker-entrypoint-initdb.d/db_dump.sql:ro
+      # - ./backend/db_dump.sql:/docker-entrypoint-initdb.d/db_dump.sql:ro
     ports:
       - "5432:5432"  # Exposed port matches your original note     - "5432:5432"
 
@@ -30,15 +30,16 @@ services:
     container_name: react_app
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     ports:
-      - "5173:5173"
+      - "80:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    environment:
+      VITE_API_URL: http://localhost:8000
     stdin_open: true
     tty: true
-    command: npm start
 
 volumes:
   pgdata:
