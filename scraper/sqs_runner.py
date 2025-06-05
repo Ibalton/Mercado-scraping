@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, text
 import logging
 from sqlalchemy.orm import sessionmaker
-from scraper.database import Database
+from database import Database
 from models import Listings, Prices, ProductCandidates, ProductEmbeddings, Products
 from base.mercadolibre import MercadoLibre  # Replace with actual import
 from botocore.config import Config
