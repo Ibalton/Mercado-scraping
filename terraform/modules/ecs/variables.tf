@@ -24,6 +24,10 @@ variable "ecr_repository_url" {
   type        = string
 }
 
+
+variable "sqs_region" {
+  description = "SQS region"
+}
 variable "database_url" {
   description = "Database connection URL"
   type        = string

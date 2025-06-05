@@ -92,7 +92,16 @@ class Database:
             logger.error(f"❌ Failed to create enum types: {e}")
             self.session.rollback()
             raise e
-
+    
+    def safe_commit(self):
+        """
+        Safely commit the session, handling PendingRollbackError.
+        """
+        try:
+            self.session.commit()
+        except PendingRollbackError:
+            self.session.rollback()
+            raise Exception("Transaction failed and was rolled back.")
     def enable_pgvector_extension(self):
         """
         Enable the pgvector extension required for vector operations
@@ -118,7 +127,7 @@ class Database:
             self.session.rollback()
     def find_nearest_title(self,product):
         # Encode the product title into a vector
-        query_vector = self.model.encode(product.title, normalize_embeddings=True)
+        query_vector = product["title_vector"]
         query_vector = list(map(float, query_vector))  # Ensure it's a list of floats
 
         # Convert the query vector into a PostgreSQL-compatible array and cast it to 'vector'
@@ -137,3 +146,7 @@ class Database:
                         LIMIT 5;    -- Limits the results to the top 5 closest matches
                     """)
         return self.session.execute(raw_query).first()
+    def find_listing_by_ml_id(self,product):
+        return self.session.query(Listings).filter(Listings.external_id == product.ml_id , Listings.marketplace_id == 1).first()
+    def retrieve_queries(self,queries:list[String]):
+        return self.session.query(Queries).filter(Queries.query_text.in_(queries)).all()

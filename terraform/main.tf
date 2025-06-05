@@ -29,6 +29,7 @@ module "rds" {
   ecs_tasks_sg_id    = module.ecs.ecs_tasks_sg_id
   db_subnet_group    = module.vpc.db_subnet_group
   private_subnet_ids = module.vpc.private_subnet_ids
+
 }
 
 module "ecr_build" {
@@ -59,6 +60,7 @@ module "ecs" {
   scraper_image = module.ecr_build.scraper_image
 
   sqs_queue_url = module.sqs.scraper_sqs_queue_url
+  sqs_region = var.aws_region
   
   
   depends_on = [module.ecr_build]
