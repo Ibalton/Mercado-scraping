@@ -29,7 +29,7 @@ resource "aws_instance" "back" {
   ami           = "ami-0c02fb55956c7d316"
   instance_type = "t2.micro"
   subnet_id     = var.private_subnet_id
-  key_name      = aws_key_pair.key.key_name
+  # key_name      = aws_key_pair.key.key_name
   vpc_security_group_ids = [aws_security_group.private_sg.id]
 
   root_block_device {

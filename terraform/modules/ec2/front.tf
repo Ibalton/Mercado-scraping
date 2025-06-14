@@ -24,16 +24,16 @@ resource "aws_security_group" "public_sg" {
   }
 }
 
-resource "aws_key_pair" "key" {
-  key_name   = "mercado-key"
-  public_key = file("~/.ssh/mercado.pub")
-}
+# resource "aws_key_pair" "key" {
+#   key_name   = "mercado-key"
+#   public_key = file("~/.ssh/mercado.pub")
+# }
 
 resource "aws_instance" "front" {
   ami           = "ami-0c02fb55956c7d316"  # Amazon Linux 2
   instance_type = "t2.micro"
   subnet_id     = var.public_subnet_id
-  key_name      = aws_key_pair.key.key_name
+  # key_name      = aws_key_pair.key.key_name
   associate_public_ip_address = false
   vpc_security_group_ids = [aws_security_group.public_sg.id]
 
