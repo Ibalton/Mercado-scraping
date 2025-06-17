@@ -51,10 +51,26 @@ resource "aws_security_group" "lambda" {
   tags = local.default_tags
 }
 
+# Security group for database access from ECS tasks
+resource "aws_security_group" "db_access" {
+  name        = "mercado-db-access"
+  description = "Security group for database access from ECS tasks"
+  vpc_id      = module.vpc.vpc_id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = local.default_tags
+}
+
 module "rds" {
   source             = "./modules/rds"
   vpc_id             = module.vpc.vpc_id
-  ecs_tasks_sg_id    = module.ecs["dev"].ecs_tasks_sg_id
+  ecs_tasks_sg_id    = aws_security_group.db_access.id
   db_subnet_group    = module.vpc.db_subnet_group
   private_subnet_ids = module.vpc.private_subnet_ids
   lambda_sg_id       = aws_security_group.lambda.id
@@ -84,6 +100,7 @@ module "ecs" {
   ecr_repository_url = module.ecr.ecr_repo_url
   database_url       = module.rds.database_url
   aws_region         = var.aws_region
+  db_access_sg_id    = aws_security_group.db_access.id
 
   # Environment-specific configuration
   environment       = each.key

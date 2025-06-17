@@ -83,4 +83,9 @@ variable "default_tags" {
   description = "Default tags to apply to all resources"
   type        = map(string)
   default     = {}
+}
+
+variable "db_access_sg_id" {
+  description = "Security group ID for database access"
+  type        = string
 } 
