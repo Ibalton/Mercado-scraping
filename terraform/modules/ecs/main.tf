@@ -174,25 +174,17 @@ resource "aws_ecs_task_definition" "scraper_task" {
   family                   = "${var.environment}-mercado-scraper-task"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = "512"
-  memory                   = "1024"
-  execution_role_arn       = data.aws_iam_role.lab_role.arn   # <- No longer created
-  task_role_arn            = data.aws_iam_role.lab_role.arn       
+  cpu                      = 512
+  memory                   = 1024
+  execution_role_arn       = data.aws_iam_role.lab_role.arn
+  task_role_arn            = data.aws_iam_role.lab_role.arn
 
   container_definitions = jsonencode([
     {
-      name      = "mercado-scraper"
-      image     = var.scraper_image
-      essential = true,
+      name  = "mercado-scraper"
+      image = var.scraper_image
+      essential = true
       environment = [
-        {
-          name  = "SQS_QUEUE_URL"
-          value = var.sqs_queue_url
-        },
-        {
-          name  = "SQS_REGION"
-          value = var.sqs_region
-        },
         {
           name  = "DATABASE_URL"
           value = var.database_url
@@ -200,19 +192,29 @@ resource "aws_ecs_task_definition" "scraper_task" {
         {
           name  = "PYTHONUNBUFFERED"
           value = "1"
+        },
+        {
+          name  = "SQS_QUEUE_URL"
+          value = var.sqs_queue_url
+        },
+        {
+          name  = "SQS_REGION"
+          value = var.sqs_region
         }
-      ],
+      ]
       logConfiguration = {
-        logDriver = "awslogs",
+        logDriver = "awslogs"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.scraper.name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "ecs"
+          "awslogs-group"         = aws_cloudwatch_log_group.scraper.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
         }
       }
     }
   ])
 }
+
+
 
 
 # Application Load Balancer

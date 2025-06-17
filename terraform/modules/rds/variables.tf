@@ -2,6 +2,11 @@ variable "vpc_id" {
   description = "ID of the VPC"
   type        = string
 }
+variable "lambda_sg_id" {
+  description = "Security group ID for Lambda"
+  type        = string
+  default     = null
+}
 
 variable "ecs_tasks_sg_id" {
   description = "Security group ID of the ECS tasks"

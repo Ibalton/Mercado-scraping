@@ -1,3 +1,5 @@
+
+
 resource "aws_security_group" "rds" {
   name   = "mercado-rds"
   vpc_id = var.vpc_id
@@ -6,8 +8,8 @@ resource "aws_security_group" "rds" {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [var.ecs_tasks_sg_id]
-    description     = "Fargate backend to Postgres"
+    security_groups = compact([var.ecs_tasks_sg_id, var.lambda_sg_id])
+    description     = "Fargate backend and Lambda to Postgres"
   }
 
   egress {

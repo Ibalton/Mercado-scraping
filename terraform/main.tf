@@ -23,7 +23,7 @@ output "ecr_repo_url" {
   value = module.ecr.ecr_repo_url
 }
 
-module "ec2" {
+/* module "ec2" {
   source            = "./modules/ec2"
   vpc_id            = module.vpc.vpc_id
   public_subnet_id  = module.vpc.public_subnet_id
@@ -31,10 +31,24 @@ module "ec2" {
   ami_id            = var.ami_id
   key_pair_name     = var.key_pair_name
   my_ip             = var.my_ip
-}
+} */
 
 module "sqs" {
   source = "./modules/sqs"
+}
+
+resource "aws_security_group" "lambda" {
+  name        = "lambda-sg"
+  vpc_id      = module.vpc.vpc_id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = local.default_tags
 }
 
 module "rds" {
@@ -43,6 +57,7 @@ module "rds" {
   ecs_tasks_sg_id    = module.ecs["dev"].ecs_tasks_sg_id
   db_subnet_group    = module.vpc.db_subnet_group
   private_subnet_ids = module.vpc.private_subnet_ids
+  lambda_sg_id       = aws_security_group.lambda.id
 }
 
 module "ecr_build" {
@@ -98,6 +113,15 @@ module "monitoring" {
   ecs_service_name         = "${each.key}-mercado-backend-service"
   load_balancer_arn_suffix = module.ecs[each.key].load_balancer_arn_suffix
   tags                     = local.default_tags
+}
+
+module "lambda" {
+  source           = "./modules/lambda"
+  sqs_queue_url    = module.sqs.scraper_sqs_queue_url
+  sqs_region       = var.aws_region
+  database_url     = module.rds.database_url
+  lambda_subnet_ids = module.vpc.private_subnet_ids
+  lambda_security_group_ids = [aws_security_group.lambda.id]
 }
 
 # ECS-related outputs for each environment

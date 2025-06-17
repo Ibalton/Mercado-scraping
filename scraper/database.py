@@ -34,7 +34,7 @@ class Database:
             
             # Initialize database tables
             self.initialize_database()
-            
+
         except Exception as e:
             logger.error(f"❌ Database connection failed: {e}")
             # Initialize session anyway for health checks
@@ -59,8 +59,7 @@ class Database:
             Base.metadata.create_all(self.engine)
             logger.info("✅ Database tables created successfully")
             
-            # Check if basic data exists, if not create it
-            self.create_basic_data()
+            
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize database: {e}")
