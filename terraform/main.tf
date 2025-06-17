@@ -68,12 +68,20 @@ resource "aws_security_group" "db_access" {
 }
 
 module "rds" {
-  source             = "./modules/rds"
+  for_each = var.environments
+  source   = "./modules/rds"
+
+  # Environment-specific configuration
+  environment        = each.key
+  instance_class     = each.value.db_instance_class
+  
+  # Common configuration
   vpc_id             = module.vpc.vpc_id
   ecs_tasks_sg_id    = aws_security_group.db_access.id
   db_subnet_group    = module.vpc.db_subnet_group
   private_subnet_ids = module.vpc.private_subnet_ids
   lambda_sg_id       = aws_security_group.lambda.id
+  db_password        = var.db_password
 }
 
 module "ecr_build" {
@@ -98,7 +106,7 @@ module "ecs" {
   public_subnet_ids  = module.vpc.public_subnet_ids
   private_subnet_ids = module.vpc.private_subnet_ids
   ecr_repository_url = module.ecr.ecr_repo_url
-  database_url       = module.rds.database_url
+  database_url       = module.rds[each.key].database_url  # Environment-specific DB URL
   aws_region         = var.aws_region
   db_access_sg_id    = aws_security_group.db_access.id
 
@@ -136,7 +144,7 @@ module "lambda" {
   source           = "./modules/lambda"
   sqs_queue_url    = module.sqs.scraper_sqs_queue_url
   sqs_region       = var.aws_region
-  database_url     = module.rds.database_url
+  database_url     = module.rds["prod"].database_url  # Lambda uses prod DB by default
   lambda_subnet_ids = module.vpc.private_subnet_ids
   lambda_security_group_ids = [aws_security_group.lambda.id]
 }
@@ -165,5 +173,16 @@ output "load_balancer_dns_names" {
 output "monitoring_sns_topics" {
   description = "SNS topic ARNs for monitoring alerts by environment"
   value       = { for env, mon in module.monitoring : env => mon.sns_topic_arn }
+}
+
+output "rds_endpoints" {
+  description = "RDS endpoints by environment"
+  value       = { for env, rds in module.rds : env => rds.rds_endpoint }
+}
+
+output "database_urls" {
+  description = "Database connection URLs by environment"
+  value       = { for env, rds in module.rds : env => rds.database_url }
+  sensitive   = true
 }
 

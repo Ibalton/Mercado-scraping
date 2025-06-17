@@ -1,7 +1,7 @@
 
 
 resource "aws_security_group" "rds" {
-  name   = "mercado-rds"
+  name   = "mercado-rds-${var.environment}"
   vpc_id = var.vpc_id
 
   ingress {
@@ -20,32 +20,33 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
-    Name = "mercado-rds"
+    Name        = "mercado-rds-${var.environment}"
+    Environment = var.environment
   }
 }
 
-resource "aws_db_subnet_group" "default" {
-  name       = "rds-subnet-group-epic-and-iunique"
-  subnet_ids = var.private_subnet_ids
-}
-
 resource "aws_db_instance" "postgres" {
-  identifier         = "cloud"
+  identifier         = "mercado-${var.environment}"
   engine             = "postgres"
-  instance_class     = "db.t3.micro"
+  instance_class     = var.instance_class
   allocated_storage  = 20
-  db_name            = "postgres"
+  db_name            = "${var.environment}_db"
   username           = "clouduser"
-  password           = "replace_with_secret" # Use Secrets Manager or variables!
+  password           = var.db_password
   db_subnet_group_name    = var.db_subnet_group
   vpc_security_group_ids  = [aws_security_group.rds.id]
   publicly_accessible = false
   skip_final_snapshot = true
-  multi_az = false
+  multi_az = var.environment == "prod" ? true : false  # Multi-AZ only for prod
+
+  tags = {
+    Name        = "mercado-${var.environment}"
+    Environment = var.environment
+  }
 
   # Lifecycle meta-argument to prevent accidental destruction
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
     ignore_changes  = [password]
   }
 }

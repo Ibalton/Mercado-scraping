@@ -145,7 +145,7 @@ class Database:
                         LIMIT 5;    -- Limits the results to the top 5 closest matches
                     """)
         return self.session.execute(raw_query).first()
-    def find_listing_by_ml_id(self,product):
-        return self.session.query(Listings).filter(Listings.external_id == product.ml_id , Listings.marketplace_id == 1).first()
+    def find_listing_by_ml_id(self, ml_id):
+        return self.session.query(Listings).filter(Listings.external_id == ml_id , Listings.marketplace_id == 1).first()
     def retrieve_queries(self,queries:list[String]):
         return self.session.query(Queries).filter(Queries.query_text.in_(queries)).all()

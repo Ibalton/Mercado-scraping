@@ -87,13 +87,13 @@ async def load_to_db(df:pd.DataFrame):
     queries_objs = database.retrieve_queries(queries=query_list)
     queries_map = {q.query_text: q for q in queries_objs}
     logging.info(f"Queries map created with {len(queries_map)} entries.")
-    for product in df.itertuples(index=False):
+    for product in df.to_dict('records'):
         nearest_product = database.find_nearest_title(product)
         if nearest_product and nearest_product.distance < 0.15:
             nearest_product = database.session.query(Products).filter(Products.id == nearest_product.product_id).first()
         else:
             nearest_product = Products(
-                name = product.title,
+                name = product['title'],
             )
             all_new_products.append(nearest_product)
         all_products.append(nearest_product)
@@ -105,33 +105,33 @@ async def load_to_db(df:pd.DataFrame):
     for product in all_new_products:
         emb = ProductEmbeddings(
             product_id=product.id,
-            embedding=list(map(float, database.model.encode(product.name, normalize_embeddings=True)))
+            embedding=list(map(float, model.encode(product.name, normalize_embeddings=True)))
         )
         all_product_embeddings.append(emb)
     if len(all_product_embeddings) != 0:
         database.session.add_all(all_product_embeddings)
         database.safe_commit()
     logging.info(f"Product embeddings added for {len(all_product_embeddings)} products.")
-    for i, prod in enumerate(df.itertuples(index=False)):
-        if not hasattr(prod, "ml_id"):
+    for i, prod in enumerate(df.to_dict('records')):
+        if 'ml_id' not in prod:
             logging.error(f"Error: 'ml_id' missing from DataFrame row: {prod}")
             continue
-        listing = database.find_listing_by_ml_id(prod)
+        listing = database.find_listing_by_ml_id(prod['ml_id'])
         if not listing:
             try:
                 distance = all_products[i].distance
             except Exception:
                 distance = 0.0
             listing = Listings(
-                external_id=prod.ml_id,
-                title=prod.title,
-                url=prod.url,
+                external_id=prod['ml_id'],
+                title=prod['title'],
+                url=prod['url'],
                 marketplace_id=1,
-                img_url=prod.img_url
+                img_url=prod['img_url']
             )
             new_listings.append(listing)
 
-            for query_text in prod.query.split("-QUERYSEP-"):
+            for query_text in prod['query'].split("-QUERYSEP-"):
                 if query_text not in queries_map:
                     continue
                 query_obj = queries_map[query_text]
@@ -144,10 +144,10 @@ async def load_to_db(df:pd.DataFrame):
                     listing=listing
                 )
                 new_candidates.append(candidate)
-        elif listing.img_url != prod.img_url:
-            listing.img_url = prod.img_url
+        elif listing.img_url != prod['img_url']:
+            listing.img_url = prod['img_url']
             safe_commit_flag = True
-        all_listings[prod] = listing
+        all_listings[prod['ml_id']] = listing
     if new_listings:
         database.session.add_all(new_listings)
         safe_commit_flag = True
@@ -161,12 +161,15 @@ async def load_to_db(df:pd.DataFrame):
         database.safe_commit()
 
     all_prices = []
-    for prod, listing in all_listings.items():
-        price = Prices(
-            listing_id=listing.id,
-            price=float(prod.price)
-        )
-        all_prices.append(price)
+    for prod_ml_id, listing in all_listings.items():
+        # Find the corresponding product data
+        prod_data = next((p for p in df.to_dict('records') if p['ml_id'] == prod_ml_id), None)
+        if prod_data:
+            price = Prices(
+                listing_id=listing.id,
+                price=float(prod_data['price'])
+            )
+            all_prices.append(price)
     database.session.add_all(all_prices)
     database.safe_commit()
     

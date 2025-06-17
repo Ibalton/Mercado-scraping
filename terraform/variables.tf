@@ -65,19 +65,22 @@ variable "environments" {
     backend_replicas  = number
     frontend_replicas = number
     scraper_replicas  = number
+    db_instance_class = string  # Add RDS instance class per environment
   }))
   default = {
     dev = {
       instance_type     = "t2.micro"
       backend_replicas  = 1
       frontend_replicas = 1
-      scraper_replicas  = 1
+      scraper_replicas  = 0
+      db_instance_class = "db.t4g.micro"  # Small instance for dev
     }
     prod = {
       instance_type     = "t2.small"
       backend_replicas  = 2
       frontend_replicas = 2
       scraper_replicas  = 1
+      db_instance_class = "db.t3.small"   # Larger instance for prod
     }
   }
 }
