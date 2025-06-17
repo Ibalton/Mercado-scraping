@@ -385,7 +385,11 @@ resource "aws_ecs_service" "scraper" {
   cluster         = aws_ecs_cluster.mercado_cluster.id
   task_definition = aws_ecs_task_definition.scraper_task.arn
   desired_count   = var.scraper_replicas
-  launch_type     = "FARGATE"
+  capacity_provider_strategy {
+  capacity_provider = "FARGATE_SPOT"
+  weight            = 1        # 100 % Spot
+  base              = 0
+}
 
   network_configuration {
     subnets          = var.private_subnet_ids
