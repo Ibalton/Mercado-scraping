@@ -10,15 +10,7 @@ output "ecr_repo_url" {
   value = module.ecr.ecr_repo_url
 }
 
-module "ec2" {
-  source             = "./modules/ec2"
-  vpc_id             = module.vpc.vpc_id
-  public_subnet_id   = module.vpc.public_subnet_id
-  private_subnet_id  = module.vpc.private_subnet_id
-  ami_id             = var.ami_id
-  key_pair_name      = var.key_pair_name
-  my_ip              = var.my_ip
-}
+
 
 module "sqs" {
   source = "./modules/sqs"
