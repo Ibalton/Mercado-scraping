@@ -18,10 +18,6 @@ output "backend_service_name" {
   value       = aws_ecs_service.backend.name
 }
 
-output "frontend_service_name" {
-  description = "Name of the frontend ECS service"
-  value       = aws_ecs_service.frontend.name
-}
 
 output "load_balancer_dns_name" {
   description = "DNS name of the Application Load Balancer"
@@ -38,10 +34,6 @@ output "backend_url" {
   value       = "http://${aws_lb.main.dns_name}:8000"
 }
 
-output "frontend_url" {
-  description = "Frontend application URL"
-  value       = "http://${aws_lb.main.dns_name}"
-} 
 
 output "backend_api_url" {
   description = "Backend API URL for the dashboard"

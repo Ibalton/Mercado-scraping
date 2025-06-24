@@ -68,11 +68,6 @@ resource "aws_cloudwatch_log_group" "backend" {
   retention_in_days = 7
 }
 
-resource "aws_cloudwatch_log_group" "frontend" {
-  name              = "/ecs/mercado-frontend"
-  retention_in_days = 7
-}
-
 resource "aws_cloudwatch_log_group" "scraper" {
   name              = "/ecs/mercado-scraper"
   retention_in_days = 7
@@ -124,50 +119,13 @@ resource "aws_ecs_task_definition" "backend" {
   ])
 }
 
-# Frontend Task Definition
-resource "aws_ecs_task_definition" "frontend" {
-  family                   = "mercado-frontend"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu    = 256
-  memory = 512
-  execution_role_arn = data.aws_iam_role.lab_role.arn
-  task_role_arn      = data.aws_iam_role.lab_role.arn
-
-  container_definitions = jsonencode([
-    {
-      name  = "frontend"
-      image = var.frontend_image      # ⬅ the immutable tag
-      essential = true
-
-      portMappings = [{ containerPort = 80 }]
-
-      environment = [
-        {
-          name  = "VITE_API_URL"
-          value = "http://${aws_lb.main.dns_name}:8000"   # runtime value
-        }
-      ]
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.frontend.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
-        }
-      }
-    }
-  ])
-}
-
 resource "aws_ecs_task_definition" "scraper_task" {
   family                   = "mercado-scraper-task"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "512"
   memory                   = "1024"
-  execution_role_arn       = data.aws_iam_role.lab_role.arn   # <- No longer created
+  execution_role_arn       = data.aws_iam_role.lab_role.arn
   task_role_arn            = data.aws_iam_role.lab_role.arn       
 
   container_definitions = jsonencode([
@@ -251,7 +209,7 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# Target Groups
+# Target Group (backend only)
 resource "aws_lb_target_group" "backend" {
   name        = "mercado-backend-tg"
   port        = 8000
@@ -270,36 +228,7 @@ resource "aws_lb_target_group" "backend" {
   }
 }
 
-resource "aws_lb_target_group" "frontend" {
-  name        = "mercado-frontend-tg"
-  port        = 80    # Updated to match ECR build task definition
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
-  target_type = "ip"
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-    path                = "/"
-    matcher             = "200"
-  }
-}
-
-# ALB Listeners
-resource "aws_lb_listener" "frontend" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.frontend.arn
-  }
-}
-
+# ALB Listener (backend only)
 resource "aws_lb_listener" "backend" {
   load_balancer_arn = aws_lb.main.arn
   port              = "8000"
@@ -335,29 +264,6 @@ resource "aws_ecs_service" "backend" {
 
   depends_on = [aws_lb_listener.backend]
 }
-
-resource "aws_ecs_service" "frontend" {
-  name            = "mercado-frontend-service"
-  cluster         = aws_ecs_cluster.mercado_cluster.id
-  task_definition = aws_ecs_task_definition.frontend.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = var.public_subnet_ids
-    security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.frontend.arn
-    container_name   = "frontend"
-    container_port   = 80   # Updated to match ECR build task definition
-  }
-
-  depends_on = [aws_lb_listener.frontend]
-} 
-
 
 resource "aws_ecs_service" "scraper" {
   name            = "mercado-scraper-service"

@@ -69,10 +69,6 @@ output "backend_url" {
   value       = module.ecs.backend_url
 }
 
-output "frontend_url" {
-  description = "Frontend application URL"
-  value       = module.ecs.frontend_url
-}
 
 output "load_balancer_dns" {
   description = "Load balancer DNS name"

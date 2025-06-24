@@ -1,4 +1,3 @@
-
 variable "aws_region" {
   description = "AWS region to deploy to"
   type        = string
@@ -42,5 +41,3 @@ variable "db_password" {
   sensitive   = true
   description = "Password for the RDS instance"
 }
-
-
