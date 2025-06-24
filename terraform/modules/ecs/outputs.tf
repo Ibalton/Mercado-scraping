@@ -42,3 +42,8 @@ output "frontend_url" {
   description = "Frontend application URL"
   value       = "http://${aws_lb.main.dns_name}"
 } 
+
+output "backend_api_url" {
+  description = "Backend API URL for the dashboard"
+  value = "http://${aws_lb.main.dns_name}:8000" 
+}

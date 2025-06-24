@@ -79,3 +79,22 @@ output "load_balancer_dns" {
   value       = module.ecs.load_balancer_dns_name
 }
 
+
+module "s3" {
+  source = "./modules/s3"
+  
+  # Required variables for the S3 module
+  vite_build_folder = "../frontend/dist"  # Path to Vite build output
+  vite_api_url = module.ecs.backend_url    # Use the backend_url output from the ECS module
+}
+
+output "name_of_s3_bucket" {
+  description = "Name of the S3 bucket for Vite static site"
+  value       = module.s3.s3_bucket_name
+  
+}
+
+output "s3_bucket_website_url" {
+  description = "URL of the S3 bucket website"
+  value       = module.s3.s3_bucket_website_url
+}
