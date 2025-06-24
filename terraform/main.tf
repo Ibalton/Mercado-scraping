@@ -38,8 +38,8 @@ module "sqs" {
 }
 
 resource "aws_security_group" "lambda" {
-  name        = "lambda-sg"
-  vpc_id      = module.vpc.vpc_id
+  name   = "lambda-sg"
+  vpc_id = module.vpc.vpc_id
 
   egress {
     from_port   = 0
@@ -72,9 +72,9 @@ module "rds" {
   source   = "./modules/rds"
 
   # Environment-specific configuration
-  environment        = each.key
-  instance_class     = each.value.db_instance_class
-  
+  environment    = each.key
+  instance_class = each.value.db_instance_class
+
   # Common configuration
   vpc_id             = module.vpc.vpc_id
   ecs_tasks_sg_id    = aws_security_group.db_access.id
@@ -106,7 +106,7 @@ module "ecs" {
   public_subnet_ids  = module.vpc.public_subnet_ids
   private_subnet_ids = module.vpc.private_subnet_ids
   ecr_repository_url = module.ecr.ecr_repo_url
-  database_url       = module.rds[each.key].database_url  # Environment-specific DB URL
+  database_url       = module.rds[each.key].database_url # Environment-specific DB URL
   aws_region         = var.aws_region
   db_access_sg_id    = aws_security_group.db_access.id
 
@@ -125,6 +125,9 @@ module "ecs" {
   sqs_queue_url = module.sqs.scraper_sqs_queue_url
   sqs_region    = var.aws_region
 
+  cognito_pool_id   = aws_cognito_user_pool.mercado.id
+  cognito_client_id = aws_cognito_user_pool_client.spa.id
+
   depends_on = [module.ecr_build]
 }
 
@@ -141,11 +144,11 @@ module "monitoring" {
 }
 
 module "lambda" {
-  source           = "./modules/lambda"
-  sqs_queue_url    = module.sqs.scraper_sqs_queue_url
-  sqs_region       = var.aws_region
-  database_url     = module.rds["prod"].database_url  # Lambda uses prod DB by default
-  lambda_subnet_ids = module.vpc.private_subnet_ids
+  source                    = "./modules/lambda"
+  sqs_queue_url             = module.sqs.scraper_sqs_queue_url
+  sqs_region                = var.aws_region
+  database_url              = module.rds["prod"].database_url # Lambda uses prod DB by default
+  lambda_subnet_ids         = module.vpc.private_subnet_ids
   lambda_security_group_ids = [aws_security_group.lambda.id]
 }
 
@@ -184,5 +187,74 @@ output "database_urls" {
   description = "Database connection URLs by environment"
   value       = { for env, rds in module.rds : env => rds.database_url }
   sensitive   = true
+}
+
+# -------------------------------------
+# Cognito User Pool for SPA authentication
+# -------------------------------------
+
+resource "aws_cognito_user_pool" "mercado" {
+  name                     = "mercado-scraper-user-pool"
+  username_attributes      = ["email"]
+  auto_verified_attributes = ["email"]
+
+  password_policy {
+    minimum_length    = 8
+    require_symbols   = false
+    require_numbers   = false
+    require_uppercase = false
+    require_lowercase = true
+  }
+
+  tags = local.default_tags
+}
+
+resource "aws_cognito_user_pool_client" "spa" {
+  name         = "mercado-scraper-spa-client"
+  user_pool_id = aws_cognito_user_pool.mercado.id
+
+  generate_secret              = false # SPA / public client
+  explicit_auth_flows          = ["ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_SRP_AUTH", "ALLOW_CUSTOM_AUTH"]
+  supported_identity_providers = ["COGNITO"]
+
+  callback_urls = [
+    # Front-end listener DNS will be injected at apply time via Terraform interpolation
+    # Using HTTP because Learner Lab does not provision ACM certs by default
+    for env, ecs in module.ecs : "${ecs.frontend_url}/login/callback"
+  ]
+
+  logout_urls = [
+    for env, ecs in module.ecs : "${ecs.frontend_url}"
+  ]
+
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_scopes                 = ["email", "openid", "profile"]
+
+  depends_on = [aws_cognito_user_pool.mercado]
+}
+
+resource "random_pet" "cognito_domain" {
+  length = 2
+}
+
+resource "aws_cognito_user_pool_domain" "this" {
+  domain       = "mercado-${random_pet.cognito_domain.id}"
+  user_pool_id = aws_cognito_user_pool.mercado.id
+}
+
+output "cognito_pool_id" {
+  description = "ID of the Cognito User Pool"
+  value       = aws_cognito_user_pool.mercado.id
+}
+
+output "cognito_client_id" {
+  description = "ID of the Cognito User Pool client"
+  value       = aws_cognito_user_pool_client.spa.id
+}
+
+output "cognito_domain" {
+  description = "Cognito hosted UI domain"
+  value       = aws_cognito_user_pool_domain.this.domain
 }
 

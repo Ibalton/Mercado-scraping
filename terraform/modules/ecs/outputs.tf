@@ -40,7 +40,7 @@ output "load_balancer_hosted_zone_id" {
 
 output "backend_url" {
   description = "Backend API URL"
-  value       = "http://${aws_lb.main.dns_name}:8000"
+  value       = "http://${aws_lb.main.dns_name}/api"
 }
 
 output "frontend_url" {

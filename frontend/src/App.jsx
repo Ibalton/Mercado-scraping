@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import axiosClient from './axiosClient'; // Import your custom axios instance
+import React, { useState, useEffect, useContext } from 'react';
+import axiosClient, { setAuthContext } from './axiosClient'; // Import your custom axios instance
 import 'bootstrap/dist/css/bootstrap.min.css';
+import { useAuth } from 'react-oidc-context';
+import WipPage from './WipPage.jsx';
 
 // Add CSS for lighter placeholder text
 const placeholderStyles = `
@@ -59,6 +61,103 @@ function App() {
     client_name: '',
     client_email: '',
   });
+
+  const auth = useAuth();
+
+  // Set up auth context for axios
+  useEffect(() => {
+    setAuthContext(() => auth);
+  }, [auth]);
+
+  // Determine user role
+  const userGroups = auth.user?.profile['cognito:groups'] || [];
+  const isAdmin = userGroups.includes('admins');
+  const isUser = userGroups.includes('users');
+
+  // Custom logout function with client_id
+  const handleLogout = () => {
+    const clientIdToken = "__VITE_COGNITO_CLIENT_ID__";
+    const domainToken = "__VITE_COGNITO_DOMAIN__";
+    
+    // Fallback if tokens weren't replaced
+    const clientId = clientIdToken.includes("__VITE_") ? "3mpvm5sole4132a8thrlkp43dn" : clientIdToken;
+    const cognitoDomain = domainToken.includes("__VITE_") ? "https://mercado-close-monkey.auth.us-east-1.amazoncognito.com" : domainToken;
+    
+    const logoutUri = window.location.origin;
+    
+    // Clear local tokens first
+    auth.removeUser();
+    
+    // Redirect to Cognito logout with proper parameters
+    window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
+  };
+
+  if (auth.isLoading) {
+    return <div style={{padding:'2rem'}}>Loading authentication...</div>;
+  }
+
+  // Show error if there's a non-authentication error
+  if (auth.error) {
+    return <div style={{padding:'2rem', color: 'red'}}>Error: {auth.error.message}</div>;
+  }
+
+  // not authenticated – show login button instead of redirecting
+  if (!auth.isAuthenticated) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #fff159 0%, #ffeb3b 50%, #fdd835 100%)'
+      }}>
+        <div style={{
+          background: 'white',
+          padding: '2rem',
+          borderRadius: '10px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+          textAlign: 'center',
+          maxWidth: '400px'
+        }}>
+          <h2 style={{ color: '#3483fa', marginBottom: '1rem' }}>🛒 Mercado Scrape</h2>
+          <p style={{ marginBottom: '2rem', color: '#666' }}>
+            Please login to access the application
+          </p>
+          <button
+            onClick={() => auth.signinRedirect()}
+            style={{
+              display: 'inline-block',
+              background: '#3483fa',
+              color: 'white',
+              padding: '12px 24px',
+              borderRadius: '25px',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseOver={(e) => e.target.style.background = '#2968c8'}
+            onMouseOut={(e) => e.target.style.background = '#3483fa'}
+          >
+            Login with Cognito
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show appropriate interface based on user role
+  if (isUser && !isAdmin) {
+    return <UserDashboard auth={auth} userGroups={userGroups} onLogout={handleLogout} />;
+  }
+
+  // If user has no recognized groups, show WIP page
+  if (!isAdmin && !isUser) {
+    return <WipPage onLogout={handleLogout} />;
+  }
+
+  // Admin interface continues below...
 
   // Change handler for query form
   const handleQueryChange = (e) => {
@@ -171,6 +270,153 @@ function App() {
     }
   };
 
+  // Simple callback handler component
+  function CallbackHandler() {
+    return <div style={{padding:'2rem'}}>Processing login...</div>;
+  }
+
+  // Component for regular users (non-admin)
+  function UserDashboard({ auth, userGroups, onLogout }) {
+    return (
+      <div style={{ 
+        backgroundColor: '#fff159', 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #fff159 0%, #ffeb3b 50%, #fdd835 100%)',
+        width: '100vw',
+        overflowX: 'hidden'
+      }}>
+        {/* Header Section */}
+        <div style={{ 
+          backgroundColor: '#3483fa', 
+          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+          marginBottom: '30px'
+        }}>
+          <div className="container-fluid py-4 px-4">
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <h1 style={{ 
+                  color: 'white', 
+                  fontWeight: 'bold', 
+                  fontSize: '2.5rem',
+                  margin: 0,
+                  textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
+                }}>
+                  🛒 Mercado Scrape
+                </h1>
+                <p style={{ 
+                  color: '#e3f2fd', 
+                  margin: 0, 
+                  fontSize: '1.1rem' 
+                }}>
+                  Panel de Usuario
+                </p>
+              </div>
+              <div className="d-flex align-items-center gap-3">
+                <div style={{ color: 'white', fontSize: '1rem' }}>
+                  👋 {auth.user?.profile?.email || auth.user?.profile?.username || 'Usuario'}
+                </div>
+                <button
+                  onClick={onLogout}
+                  className="btn btn-outline-light btn-lg rounded-pill px-4"
+                  style={{
+                    fontWeight: '600',
+                    border: '2px solid white',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.color = '#3483fa';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.backgroundColor = 'transparent';
+                    e.target.style.color = 'white';
+                  }}
+                >
+                  🚪 Cerrar Sesión
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* User Content */}
+        <div className="container-fluid">
+          <div className="row justify-content-center">
+            <div className="col-12" style={{ maxWidth: '800px' }}>
+              <div className="card shadow-lg border-0 rounded-4" style={{ backgroundColor: 'white' }}>
+                <div className="card-header text-center" style={{ 
+                  backgroundColor: '#3483fa', 
+                  color: 'white',
+                  fontWeight: '600',
+                  fontSize: '1.5rem',
+                  borderRadius: '1.5rem 1.5rem 0 0'
+                }}>
+                  👤 Bienvenido Usuario
+                </div>
+                <div className="card-body p-5 text-center">
+                  <h3 style={{ color: '#3483fa', marginBottom: '2rem' }}>
+                    ¡Hola {auth.user?.profile?.email || auth.user?.profile?.username}!
+                  </h3>
+                  <p style={{ fontSize: '1.2rem', color: '#666', marginBottom: '3rem' }}>
+                    Tu cuenta de usuario está activa y funcionando correctamente.
+                  </p>
+                  
+                  <div className="row g-4">
+                    <div className="col-md-6">
+                      <div style={{ 
+                        background: '#f8f9fa', 
+                        padding: '2rem', 
+                        borderRadius: '15px',
+                        height: '100%'
+                      }}>
+                        <h5 style={{ color: '#3483fa', marginBottom: '1rem' }}>📊 Tus Consultas</h5>
+                        <p style={{ color: '#666' }}>
+                          Próximamente podrás ver y gestionar tus consultas de productos.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="col-md-6">
+                      <div style={{ 
+                        background: '#f8f9fa', 
+                        padding: '2rem', 
+                        borderRadius: '15px',
+                        height: '100%'
+                      }}>
+                        <h5 style={{ color: '#3483fa', marginBottom: '1rem' }}>🔔 Notificaciones</h5>
+                        <p style={{ color: '#666' }}>
+                          Configura alertas de precios para tus productos favoritos.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ 
+                    background: '#e3f2fd', 
+                    padding: '2rem', 
+                    borderRadius: '15px',
+                    marginTop: '2rem'
+                  }}>
+                    <h5 style={{ color: '#1976d2', marginBottom: '1rem' }}>ℹ️ Información de Cuenta</h5>
+                    <p style={{ color: '#666', marginBottom: '0.5rem' }}>
+                      <strong>Email:</strong> {auth.user?.profile?.email || 'No disponible'}
+                    </p>
+                    <p style={{ color: '#666', marginBottom: '0.5rem' }}>
+                      <strong>Usuario:</strong> {auth.user?.profile?.username || 'No disponible'}
+                    </p>
+                    <p style={{ color: '#666', marginBottom: '0' }}>
+                      <strong>Grupos:</strong> {userGroups.join(', ') || 'Ninguno'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ 
       backgroundColor: '#fff159', 
@@ -206,6 +452,30 @@ function App() {
               }}>
                 Tu herramienta de análisis de precios
               </p>
+            </div>
+            <div className="d-flex align-items-center gap-3">
+              <div style={{ color: 'white', fontSize: '1rem' }}>
+                👋 {auth.user?.profile?.email || auth.user?.profile?.username || 'Usuario'}
+              </div>
+              <button
+                onClick={handleLogout}
+                className="btn btn-outline-light btn-lg rounded-pill px-4"
+                style={{
+                  fontWeight: '600',
+                  border: '2px solid white',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.backgroundColor = 'white';
+                  e.target.style.color = '#3483fa';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.backgroundColor = 'transparent';
+                  e.target.style.color = 'white';
+                }}
+              >
+                🚪 Cerrar Sesión
+              </button>
             </div>
           </div>
         </div>

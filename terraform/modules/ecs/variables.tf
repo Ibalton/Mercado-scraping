@@ -88,4 +88,14 @@ variable "default_tags" {
 variable "db_access_sg_id" {
   description = "Security group ID for database access"
   type        = string
+}
+
+variable "cognito_pool_id" {
+  description = "Cognito User Pool ID"
+  type        = string
+}
+
+variable "cognito_client_id" {
+  description = "Cognito User Pool Client ID"
+  type        = string
 } 
