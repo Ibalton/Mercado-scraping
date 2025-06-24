@@ -4,8 +4,16 @@ from models import *
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from sentence_transformers import SentenceTransformer
-from base.mercadolibre import MercadoLibre
+# Attempt to import heavy ML model only if available (scraper image)
+try:
+    from sentence_transformers import SentenceTransformer  # type: ignore
+except ModuleNotFoundError:
+    SentenceTransformer = None  # type: ignore
+# Heavy scraper dependencies are only available in the scraper image
+try:
+    from base.mercadolibre import MercadoLibre  # type: ignore
+except ModuleNotFoundError:
+    MercadoLibre = None  # type: ignore
 from sqlalchemy import select
 from sqlalchemy.exc import PendingRollbackError
 import os
@@ -52,14 +60,17 @@ class API():
             self.session = sessionmaker(bind=self.engine)()
         
         try:
-            # Log memory usage before loading model
-            self.model = SentenceTransformer('all-MiniLM-L6-v2')
-            logger.info(f"✅ SentenceTransformer model loaded successfully")
+            # Only load the model when the package is present (not in the thin-backend image)
+            if SentenceTransformer is not None:
+                self.model = SentenceTransformer('all-MiniLM-L6-v2')
+                logger.info("✅ SentenceTransformer model loaded successfully")
+            else:
+                self.model = None
+                logger.info("ℹ️  SentenceTransformer not available in this image – relying on scraper service for embeddings")
         except Exception as e:
             logger.error(f"❌ Failed to load SentenceTransformer model: {e}")
             logger.error(f"❌ Error type: {type(e).__name__}")
             logger.error(f"❌ Full traceback: {traceback.format_exc()}")
-            self.model = None
 
     def initialize_database(self):
         """

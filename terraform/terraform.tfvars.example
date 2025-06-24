@@ -1,0 +1,25 @@
+# Copy this file to terraform.tfvars and fill in your values
+
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Network Configuration  
+vpc_cidr            = "10.0.0.0/16"
+public_subnet_cidr  = "10.0.1.0/24"
+private_subnet_cidr = "10.0.2.0/24"
+availability_zone   = "us-east-1a"
+
+# SSH Key Configuration
+public_key_path = "~/.ssh/id_rsa.pub"  # Path to your SSH public key
+
+# Database Configuration
+db_password = "your-secure-password-here"  # Change this to a secure password
+
+# EC2 Configuration (if needed)
+ami_id        = "ami-0c02fb55956c7d316"  # Amazon Linux 2 AMI (us-east-1)
+key_pair_name = "your-key-pair-name"
+my_ip         = "your.ip.address.here/32"  # Your IP for SSH access
+
+# Environment Configuration is defined in variables.tf with defaults:
+# dev:  db.t4g.micro for cost optimization
+# prod: db.t3.small for better performance 

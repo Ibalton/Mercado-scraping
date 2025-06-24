@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException,Query
+from fastapi import FastAPI, HTTPException,Query, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from api import API
@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import asyncio
 import logging
+from api_gateway import trigger_global_scrape
+from auth import login as cognito_login, auth_callback, admin_required, authenticated_user, logout as logout_handler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +20,11 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Or ["http://localhost:3000"]
+    allow_origins=[
+        "http://localhost:5173",  # Frontend development server
+        "http://localhost:3000",  # Alternative React dev server
+        "http://127.0.0.1:5173",  # Alternative localhost
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -44,19 +50,40 @@ async def health_check():
 async def hello_world():
     return {"message": "Hello, World!"}
 
-@app.get('/query')
+@app.get("/login")
+async def login_route(request: Request):
+    return await cognito_login(request)
+
+app.add_api_route("/auth/callback", auth_callback, methods=["GET"], name="auth_callback")
+
+@app.post("/logout")
+async def logout_route(response: Response):
+    return await logout_handler(response)
+
+# Work-in-progress endpoint for non-admin authenticated users
+@app.get("/wip", dependencies=[Depends(authenticated_user)])
+async def wip():
+    return {"message": "🚧 Work in progress"}
+
+# Identify current user (used by SPA AuthProvider)
+@app.get("/me")
+async def me(user=Depends(authenticated_user)):
+    return user
+
+# Protect admin routes
+@app.get('/query', dependencies=[Depends(admin_required)])
 async def get_queries(client_id:int = Query(None),client_email:str = Query(None)):
     queries = api.get_queries(client_id=client_id, client_email=client_email)
     return queries
-@app.get('/query/results')
+
+@app.get('/query/results', dependencies=[Depends(admin_required)])
 async def get_query_results(query_id:int = Query(None)):
     results = api.get_query_results(query_id=query_id)
     return results
-@app.post("/query")
+
+@app.post("/query", dependencies=[Depends(admin_required)])
 async def create_query(body: QueryRequest):
     logger.info(f"Creating query: {body}")
-    # Placeholder for query creation logic
-    # Replace with actual query creation logic
     try:
         query = api.post_query(body.query_text, body.client_id, body.frequency, body.pages_to_scrape)
         logger.info("Query created successfully")
@@ -64,11 +91,12 @@ async def create_query(body: QueryRequest):
     except Exception as e:
         logger.error(f"Error creating query: {str(e)}")
         return {"error": str(e)}
-    
+
 class ClientRequest(BaseModel):
     client_name: str
     client_email: str
-@app.get("/client")
+
+@app.get("/client", dependencies=[Depends(admin_required)])
 async def get_all_clients():
     """
     Get all clients
@@ -79,25 +107,24 @@ async def get_all_clients():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/client")
+@app.post("/client", dependencies=[Depends(admin_required)])
 async def create_client(body: ClientRequest):
     try:
         client = api.create_client(body.client_name, body.client_email)
         return {"message": "Client created successfully","client": client}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-#TODO: allow specific query scrapes or user specific query scrapes
-@app.post("/trigger-scrape")
+
+@app.post("/trigger-scrape", dependencies=[Depends(admin_required)])
 async def trigger_scrape():
-    if tasks:
-        logger.info("Scrape already in progress")
-        return {"message": "Scrape already in progress"}
-    logger.info("Triggering scrape")
-    task = asyncio.create_task(api.scrape_all())
-    task.add_done_callback(lambda t: tasks.pop() if tasks else None)
-    tasks.append(task)
-    logger.info("Scrape triggered successfully")
-    return {"message": "Scrape triggered successfully"}
+    """Proxy endpoint that asks the scraper service to perform a global scrape."""
+    try:
+        # Run the blocking HTTP call in a thread so we do not block the asyncio loop
+        response = await asyncio.to_thread(trigger_global_scrape)
+        return response
+    except Exception as e:
+        logger.error("Error triggering scrape via scraper service: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

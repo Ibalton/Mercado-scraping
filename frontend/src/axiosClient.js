@@ -12,11 +12,23 @@ const axiosClient = axios.create({
   }
 });
 
+// Function to get the current auth context (will be set by the app)
+let getAuthContext = null;
+
+export function setAuthContext(authContextGetter) {
+  getAuthContext = authContextGetter;
+}
+
 // Optionally, you can add interceptors for requests/responses
 axiosClient.interceptors.request.use(
   (config) => {
-    // e.g., add authorization token if available
-    // config.headers.Authorization = 'Bearer token';
+    // Add OIDC access token if available
+    if (getAuthContext) {
+      const auth = getAuthContext();
+      if (auth.isAuthenticated && auth.user?.access_token) {
+        config.headers.Authorization = `Bearer ${auth.user.access_token}`;
+      }
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -24,7 +36,11 @@ axiosClient.interceptors.request.use(
 
 axiosClient.interceptors.response.use(
   (response) => response,
-  (error) => Promise.reject(error)
+  (error) => {
+    // Log the error for debugging
+    console.log('API Error:', error.response?.status, error.response?.data);
+    return Promise.reject(error);
+  }
 );
 
 export default axiosClient;
