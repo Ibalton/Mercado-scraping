@@ -98,6 +98,7 @@ async def _get_user_groups(username: str) -> List[str]:
                 UserPoolId=COGNITO_POOL_ID
             )
         )
+        print("response", response)
         return [group['GroupName'] for group in response.get('Groups', [])]
     except Exception as e:
         logger.error(f"Failed to get user groups from Cognito: {e}")
@@ -191,7 +192,6 @@ def get_current_user(role: str | None = None):
             # Get user groups from Cognito API instead of JWT claims
             groups: List[str] = await _get_user_groups(username)
             print("groups", groups)
-            groups = ["admins"]
             
             if role and role not in groups:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Forbidden")

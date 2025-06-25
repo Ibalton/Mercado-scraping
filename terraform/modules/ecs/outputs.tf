@@ -1,3 +1,5 @@
+# modules/ecs/outputs.tf
+
 output "ecs_cluster_id" {
   description = "ID of the ECS cluster"
   value       = aws_ecs_cluster.mercado_cluster.id
@@ -29,26 +31,41 @@ output "scraper_service_name" {
 }
 
 output "load_balancer_dns_name" {
-  description = "Load balancer DNS name"
-  value       = aws_lb.main.dns_name
+  description = "External load balancer DNS name"
+  value       = aws_lb.external.dns_name
+}
+
+output "internal_load_balancer_dns_name" {
+  description = "Internal load balancer DNS name"
+  value       = aws_lb.internal.dns_name
 }
 
 output "load_balancer_hosted_zone_id" {
-  description = "Hosted zone ID of the Application Load Balancer"
-  value       = aws_lb.main.zone_id
+  description = "Hosted zone ID of the External Application Load Balancer"
+  value       = aws_lb.external.zone_id
 }
 
 output "backend_url" {
-  description = "Backend API URL"
-  value       = "http://${aws_lb.main.dns_name}/api"
+  description = "Backend API URL (through external ALB)"
+  value       = "http://${aws_lb.external.dns_name}/api"
+}
+
+output "internal_backend_url" {
+  description = "Internal backend API URL (direct NLB access)"
+  value       = "http://${aws_lb.internal.dns_name}"
 }
 
 output "frontend_url" {
   description = "Frontend application URL"
-  value       = "http://${aws_lb.main.dns_name}"
+  value       = "http://${aws_lb.external.dns_name}"
 }
 
 output "load_balancer_arn_suffix" {
-  description = "ARN suffix of the load balancer for monitoring"
-  value       = aws_lb.main.arn_suffix
-} 
+  description = "ARN suffix of the external load balancer for monitoring"
+  value       = aws_lb.external.arn_suffix
+}
+
+output "internal_load_balancer_arn_suffix" {
+  description = "ARN suffix of the internal load balancer for monitoring"
+  value       = aws_lb.internal.arn_suffix
+}

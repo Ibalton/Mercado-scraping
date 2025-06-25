@@ -142,7 +142,6 @@ module "ecr_build" {
 }
 
 
-# for_each for multiple environments
 module "ecs" {
   for_each = var.environments
   source   = "./modules/ecs"
@@ -150,8 +149,9 @@ module "ecs" {
   vpc_id             = module.vpc.vpc_id
   public_subnet_ids  = module.vpc.public_subnet_ids
   private_subnet_ids = module.vpc.private_subnet_ids
+  private_subnet_cidrs = module.vpc.private_subnet_cidrs  # ADD THIS LINE
   ecr_repository_url = module.ecr.ecr_repo_url
-  database_url       = module.rds[each.key].database_url # Environment-specific DB URL
+  database_url       = module.rds[each.key].database_url
   aws_region         = var.aws_region
   db_access_sg_id    = aws_security_group.db_access.id
 
@@ -171,15 +171,14 @@ module "ecs" {
   sqs_region    = var.aws_region
 
   cognito_pool_id = aws_cognito_user_pool.mercado.id
-  cognito_client_id = aws_cognito_user_pool_client.spa.id   # NEW
-  cognito_domain    = aws_cognito_user_pool_domain.this.domain  # NEW
+  cognito_client_id = aws_cognito_user_pool_client.spa.id
+  cognito_domain    = aws_cognito_user_pool_domain.this.domain
 
   # Pass the actual callback URL that's known immediately
   cognito_redirect_uri = local.cognito_callback_urls[each.key]
   cognito_logout_uri   = local.cognito_logout_urls[each.key]
 
   depends_on = [module.ecr_build,module.sqs]
-
 }
 
 # Monitoring module for each environment

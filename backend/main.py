@@ -49,6 +49,11 @@ tasks = []
 
 class QueryRequest(BaseModel):
     query_text: str
+    frequency: str
+    pages_to_scrape: int
+
+class AdminQueryRequest(BaseModel):
+    query_text: str
     client_id: int
     frequency: str
     pages_to_scrape: int
@@ -84,6 +89,155 @@ async def wip():
 async def me(user=Depends(authenticated_user)):
     return user
 
+# User-friendly endpoints for authenticated users
+@app.get("/api/user/profile")
+async def get_user_profile(user=Depends(authenticated_user)):
+    """
+    Get user profile and automatically create/get their client record.
+    """
+    try:
+        username = user.get("username", "unknown")
+        
+        # Try to extract email from user info - check multiple possible JWT claims
+        email = None
+        if "email" in user:
+            email = user["email"]
+        elif "email_verified" in user:
+            # Sometimes email is in a different claim
+            email = user.get("email", None)
+        
+        # If no email found in user object, try to extract from username if it looks like an email
+        if not email:
+            if "@" in username:
+                email = username
+            else:
+                # Fallback: create a placeholder email
+                email = f"{username}@mercadoscrape.local"
+        
+        logger.info(f"Creating profile for user: {username}, email: {email}")
+        
+        # Get or create client for the user
+        client = api.get_or_create_client_for_user(username, email)
+        
+        # Check if user is admin
+        is_admin = "admins" in user.get("groups", [])
+        
+        return {
+            "username": username,
+            "email": email,
+            "client_id": client["id"],
+            "is_admin": is_admin,
+            "client": client
+        }
+    except Exception as e:
+        logger.error(f"Error getting user profile: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/user/requests")
+async def get_user_requests(user=Depends(authenticated_user)):
+    """
+    Get all requests (queries) for the current user.
+    Admins can see all requests, regular users see only their own.
+    """
+    try:
+        # Get user profile to get client_id
+        username = user.get("username", "unknown")
+        email = user.get("email")
+        if not email:
+            if "@" in username:
+                email = username
+            else:
+                email = f"{username}@mercadoscrape.local"
+                
+        client = api.get_or_create_client_for_user(username, email)
+        client_id = client["id"]
+        
+        # Check if user is admin
+        is_admin = "admins" in user.get("groups", [])
+        
+        # Get queries for user
+        queries = api.get_queries_for_user(client_id, is_admin)
+        
+        return {
+            "requests": queries,
+            "count": len(queries),
+            "limit": None if is_admin else 5,
+            "is_admin": is_admin
+        }
+    except Exception as e:
+        logger.error(f"Error getting user requests: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/user/requests")
+async def create_user_request(body: QueryRequest, user=Depends(authenticated_user)):
+    """
+    Create a new request (query) for the current user.
+    Regular users are limited to 5 active requests.
+    """
+    try:
+        # Get user profile to get client_id
+        username = user.get("username", "unknown")
+        email = user.get("email")
+        if not email:
+            if "@" in username:
+                email = username
+            else:
+                email = f"{username}@mercadoscrape.local"
+                
+        client = api.get_or_create_client_for_user(username, email)
+        client_id = client["id"]
+        
+        # Check if user is admin
+        is_admin = "admins" in user.get("groups", [])
+        
+        # Create query for user
+        query = api.post_query_for_user(
+            body.query_text, 
+            client_id, 
+            body.frequency, 
+            body.pages_to_scrape, 
+            is_admin
+        )
+        
+        logger.info(f"Request created successfully for user {username}")
+        return {"message": "Request created successfully", "query": query}
+        
+    except Exception as e:
+        logger.error(f"Error creating user request: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/user/requests/{query_id}/results")
+async def get_user_request_results(query_id: int, user=Depends(authenticated_user)):
+    """
+    Get results for a specific request (query).
+    Regular users can only see results for their own queries.
+    """
+    try:
+        # Get user profile to get client_id
+        username = user.get("username", "unknown")
+        email = user.get("email")
+        if not email:
+            if "@" in username:
+                email = username
+            else:
+                email = f"{username}@mercadoscrape.local"
+                
+        client = api.get_or_create_client_for_user(username, email)
+        client_id = client["id"]
+        
+        # Check if user is admin
+        is_admin = "admins" in user.get("groups", [])
+        
+        # Get query results for user
+        results = api.get_query_results_for_user(query_id, client_id, is_admin)
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error getting user request results: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# Update existing admin endpoints to maintain backward compatibility
 # Protect admin routes
 @app.get('/api/query', dependencies=[Depends(admin_required)])
 async def get_queries(client_id:int = Query(None),client_email:str = Query(None)):
@@ -96,7 +250,7 @@ async def get_query_results(query_id:int = Query(None)):
     return results
 
 @app.post("/api/query", dependencies=[Depends(admin_required)])
-async def create_query(body: QueryRequest):
+async def create_query(body: AdminQueryRequest):
     logger.info(f"Creating query: {body}")
     try:
         query = api.post_query(body.query_text, body.client_id, body.frequency, body.pages_to_scrape)

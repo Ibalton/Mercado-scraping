@@ -1,13 +1,13 @@
+# modules/ecs/variables.tf
+
 variable "vpc_id" {
   description = "ID of the VPC"
   type        = string
 }
 
-
 variable "sqs_queue_url" {
   description = "Queue url for scraping requests"
 }
-
 
 variable "public_subnet_ids" {
   description = "List of public subnet IDs"
@@ -19,15 +19,20 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
+variable "private_subnet_cidrs" {
+  description = "List of private subnet CIDR blocks for NLB security"
+  type        = list(string)
+}
+
 variable "ecr_repository_url" {
   description = "ECR repository URL"
   type        = string
 }
 
-
 variable "sqs_region" {
   description = "SQS region"
 }
+
 variable "database_url" {
   description = "Database connection URL"
   type        = string
@@ -47,7 +52,6 @@ variable "frontend_image" {
   description = "Frontend Docker image URI with immutable tag"
   type        = string
 } 
-
 
 variable "scraper_image" {
   description = "Scraper Docker image URI with immutable tag"
@@ -108,11 +112,11 @@ variable "cognito_domain" {
 variable "cognito_redirect_uri" {
   description = "Cognito redirect URI for the frontend"
   type        = string
-  default     = ""  # Empty default
+  default     = ""
 }
 
 variable "cognito_logout_uri" {
   description = "Cognito logout URI for the frontend"
   type        = string
-  default     = ""  # Empty default
+  default     = ""
 }

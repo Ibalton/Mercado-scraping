@@ -191,3 +191,8 @@ output "db_subnet_group" {
 output "private_subnet_ids" {
   value = [aws_subnet.private.id, aws_subnet.private2.id]
 }
+
+output "private_subnet_cidrs" {
+  description = "CIDR blocks of private subnets"
+  value       = local.private_subnets
+}

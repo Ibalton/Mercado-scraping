@@ -1,3 +1,5 @@
+# modules/ecs/main.tf
+
 # ECS Cluster
 resource "aws_ecs_cluster" "mercado_cluster" {
   name = "${var.environment}-mercado-scraper-cluster"
@@ -26,7 +28,7 @@ locals {
       Project     = "mercado-scraper"
     }
   )
-  logout_uri = "https://${var.cognito_domain}.auth.${var.aws_region}.amazoncognito.com/logout?client_id=${var.cognito_client_id}&logout_uri=http://${aws_lb.main.dns_name}"
+  logout_uri = "https://${var.cognito_domain}.auth.${var.aws_region}.amazoncognito.com/logout?client_id=${var.cognito_client_id}&logout_uri=http://${aws_lb.external.dns_name}"
 }
 
 # Security Group for ECS Tasks
@@ -35,21 +37,22 @@ resource "aws_security_group" "ecs_tasks" {
   description = "Security group for ECS tasks"
   vpc_id      = var.vpc_id
 
-  # Allow ALBs to reach the tasks only on required ports
+  # Allow External ALB to reach frontend containers on port 80
   ingress {
-    description     = "Public ALB to frontend containers (:80)"
+    description     = "External ALB to frontend containers"
     protocol        = "tcp"
     from_port       = 80
     to_port         = 80
-    security_groups = [aws_security_group.alb.id]
+    security_groups = [aws_security_group.external_alb.id]
   }
 
+  # Allow Internal NLB to reach backend containers on port 8000
   ingress {
-    description     = "ALB to backend containers (:8000)"
-    protocol        = "tcp"
-    from_port       = 8000
-    to_port         = 8000
-    security_groups = [aws_security_group.alb.id]
+    description = "Internal NLB to backend containers"
+    protocol    = "tcp"
+    from_port   = 8000
+    to_port     = 8000
+    cidr_blocks = var.private_subnet_cidrs  # NLB doesn't have security groups
   }
 
   egress {
@@ -94,7 +97,7 @@ resource "aws_ecs_task_definition" "backend" {
   container_definitions = jsonencode([
     {
       name  = "backend"
-      image = var.backend_image      # ⬅ the immutable tag
+      image = var.backend_image
       essential = true
       
       portMappings = [
@@ -115,7 +118,7 @@ resource "aws_ecs_task_definition" "backend" {
         },
         {
           name  = "SCRAPER_URL"
-          value = "http://mercado-scraper:8001" # ECS service DNS inside cluster
+          value = "http://mercado-scraper:8001"
         },
         {
           name  = "COGNITO_POOL_ID"
@@ -160,7 +163,7 @@ resource "aws_ecs_task_definition" "frontend" {
   container_definitions = jsonencode([
     {
       name  = "frontend"
-      image = var.frontend_image      # ⬅ the immutable tag
+      image = var.frontend_image
       essential = true
 
       portMappings = [{ containerPort = 80 }]
@@ -180,7 +183,7 @@ resource "aws_ecs_task_definition" "frontend" {
         },
         {
           name  = "VITE_COGNITO_REGION"
-          value = var.aws_region         # already passed into the module
+          value = var.aws_region
         },
         {
           name  = "VITE_COGNITO_DOMAIN"
@@ -191,7 +194,7 @@ resource "aws_ecs_task_definition" "frontend" {
           value = var.cognito_logout_uri != "" ? var.cognito_logout_uri : "PLACEHOLDER_WILL_BE_UPDATED"
         },
         {
-          name      = "VITE_COGNITO_REDIRECT_URI"
+          name  = "VITE_COGNITO_REDIRECT_URI"
           value = var.cognito_redirect_uri != "" ? var.cognito_redirect_uri : "PLACEHOLDER_WILL_BE_UPDATED"
         }
       ]
@@ -208,7 +211,7 @@ resource "aws_ecs_task_definition" "frontend" {
   ])
 }
 
-
+# Scraper Task Definition
 resource "aws_ecs_task_definition" "scraper_task" {
   family                   = "${var.environment}-mercado-scraper-task"
   requires_compatibilities = ["FARGATE"]
@@ -259,26 +262,24 @@ resource "aws_ecs_task_definition" "scraper_task" {
   ])
 }
 
-
-
-
-# Application Load Balancer
-resource "aws_lb" "main" {
-  name               = "${var.environment}-mercado-alb"
+# ===== EXTERNAL APPLICATION LOAD BALANCER (PUBLIC) =====
+resource "aws_lb" "external" {
+  name               = "${var.environment}-mercado-external-alb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
+  security_groups    = [aws_security_group.external_alb.id]
   subnets           = var.public_subnet_ids
 
   tags = merge(local.common_tags, {
-    Name = "${var.environment}-mercado-alb"
+    Name = "${var.environment}-mercado-external-alb"
+    Type = "External"
   })
 }
 
-# ALB Security Group
-resource "aws_security_group" "alb" {
-  name        = "${var.environment}-mercado-alb"
-  description = "Security group for ALB"
+# External ALB Security Group
+resource "aws_security_group" "external_alb" {
+  name        = "${var.environment}-mercado-external-alb"
+  description = "Security group for external ALB"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -286,9 +287,8 @@ resource "aws_security_group" "alb" {
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTP from anywhere"
   }
-
-  # Removed public access to :8000 – backend is now internal only
 
   egress {
     from_port   = 0
@@ -298,35 +298,44 @@ resource "aws_security_group" "alb" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.environment}-mercado-alb"
+    Name = "${var.environment}-mercado-external-alb"
   })
 }
 
-# Target group for backend ECS tasks (direct ALB routing)
-resource "aws_lb_target_group" "backend" {
-  name        = "${var.environment}-backend-tg"
-  port        = 8000
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
-  target_type = "ip"
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 5
-    timeout             = 15
-    interval            = 60
-    protocol            = "HTTP"
-    path                = "/api/health"
-    matcher             = "200"
-  }
-
-  tags = local.common_tags
+###############################################################################
+# 1. Pick deterministic private IPs in each private subnet (.10 address)
+###############################################################################
+locals {
+  nlb_private_ips = [
+    for cidr in var.private_subnet_cidrs : cidrhost(cidr, 10)
+  ]
 }
 
+###############################################################################
+# 2. Build the NLB with those deterministic private IPs
+###############################################################################
+resource "aws_lb" "internal" {
+  name               = "${var.environment}-mercado-internal-nlb"
+  internal           = true
+  load_balancer_type = "network"
+
+  dynamic "subnet_mapping" {
+    for_each = zipmap(var.private_subnet_ids, local.nlb_private_ips)
+    content {
+      subnet_id            = subnet_mapping.key
+      private_ipv4_address = subnet_mapping.value
+    }
+  }
+
+  tags = merge(local.common_tags, { Type = "Internal" })
+}
+
+# ===== TARGET GROUPS =====
+
+# Frontend Target Group (for External ALB)
 resource "aws_lb_target_group" "frontend" {
-  name        = "${var.environment}-mercado-frontend-tg"
-  port        = 80    # Updated to match ECR build task definition
+  name        = "${var.environment}-frontend-tg"
+  port        = 80
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "ip"
@@ -344,31 +353,51 @@ resource "aws_lb_target_group" "frontend" {
   tags = local.common_tags
 }
 
-# Legacy public target group (removed since using NLB)
-# resource "aws_lb_target_group" "backend_public" {
-#   name        = "${var.environment}-backend-public-tg"
-#   port        = 8000
-#   protocol    = "HTTP"
-#   vpc_id      = var.vpc_id
-#   target_type = "ip"
-#
-#   health_check {
-#     enabled             = true
-#     healthy_threshold   = 2
-#     unhealthy_threshold = 5
-#     timeout             = 15
-#     interval            = 60
-#     protocol            = "HTTP"
-#     path                = "/health"
-#     matcher             = "200"
-#   }
-#
-#   tags = local.common_tags
-# }
+# Backend Target Group (for Internal NLB)
+resource "aws_lb_target_group" "backend_nlb" {
+  name        = "${var.environment}-backend-nlb-tg"
+  port        = 8000
+  protocol    = "TCP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
 
-# ALB Listeners
-resource "aws_lb_listener" "frontend" {
-  load_balancer_arn = aws_lb.main.arn
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    protocol            = "TCP"
+    interval            = 30
+  }
+
+  tags = local.common_tags
+}
+
+# Proxy Target Group for NLB (targets the NLB from ALB)
+resource "aws_lb_target_group" "nlb_proxy" {
+  name        = "${var.environment}-nlb-proxy-tg"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/api/health"
+    matcher             = "200"
+  }
+
+  tags = local.common_tags
+}
+
+# ===== LISTENERS =====
+
+# External ALB Listener
+resource "aws_lb_listener" "external" {
+  load_balancer_arn = aws_lb.external.arn
   port              = "80"
   protocol          = "HTTP"
 
@@ -378,42 +407,28 @@ resource "aws_lb_listener" "frontend" {
   }
 }
 
-# Legacy target group and attachment (replaced by NLB wrapper)
-# resource "aws_lb_target_group" "backend_internal_alb" {
-#   name        = "${var.environment}-backend-alb-tg"
-#   port        = 8000
-#   protocol    = "TCP"
-#   vpc_id      = var.vpc_id
-#   target_type = "alb"
-#
-#   health_check {
-#     enabled             = true
-#     healthy_threshold   = 2
-#     unhealthy_threshold = 5
-#     timeout             = 15
-#     interval            = 60
-#     protocol            = "HTTP"
-#     path                = "/health"
-#     matcher             = "200"
-#   }
-#
-#   tags = local.common_tags
-# }
+# Internal NLB Listener (port 80 -> 8000)
+resource "aws_lb_listener" "internal" {
+  load_balancer_arn = aws_lb.internal.arn
+  port              = "80"
+  protocol          = "TCP"
 
-# resource "aws_lb_target_group_attachment" "backend_alb_attachment" {
-#   target_group_arn = aws_lb_target_group.backend_internal_alb.arn
-#   target_id        = aws_lb.backend_alb.arn
-#   port             = 8000
-# }
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend_nlb.arn
+  }
+}
 
-# Path-based routing rule for /api/* to backend
+# ===== ALB ROUTING RULES =====
+
+# Route /api/* to Internal NLB
 resource "aws_lb_listener_rule" "api_proxy" {
-  listener_arn = aws_lb_listener.frontend.arn
+  listener_arn = aws_lb_listener.external.arn
   priority     = 10
 
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.backend.arn  # Direct to backend TG
+    target_group_arn = aws_lb_target_group.nlb_proxy.arn
   }
 
   condition {
@@ -421,7 +436,19 @@ resource "aws_lb_listener_rule" "api_proxy" {
   }
 }
 
-# ECS Services with count meta-argument
+###############################################################################
+# 3. Attach those known private IPs to the ALB target group
+###############################################################################
+resource "aws_lb_target_group_attachment" "nlb_to_alb" {
+  for_each         = toset(local.nlb_private_ips)      # use private IPs as keys (known at plan time)
+  target_group_arn = aws_lb_target_group.nlb_proxy.arn
+  target_id        = each.value                        # the private IP of the NLB node
+  port             = 80
+}
+
+# ===== ECS SERVICES =====
+
+# Backend Service
 resource "aws_ecs_service" "backend" {
   count           = var.backend_replicas > 0 ? 1 : 0
   name            = "${var.environment}-mercado-backend-service"
@@ -437,18 +464,19 @@ resource "aws_ecs_service" "backend" {
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.backend.arn  # Use ALB target group
+    target_group_arn = aws_lb_target_group.backend_nlb.arn
     container_name   = "backend"
     container_port   = 8000
   }
 
-  health_check_grace_period_seconds = 1800
+  health_check_grace_period_seconds = 60
 
-  depends_on = [aws_lb_listener.frontend]  # Depend on ALB listener
+  depends_on = [aws_lb_listener.internal]
 
   tags = local.common_tags
 }
 
+# Frontend Service
 resource "aws_ecs_service" "frontend" {
   count           = var.frontend_replicas > 0 ? 1 : 0
   name            = "${var.environment}-mercado-frontend-service"
@@ -466,46 +494,31 @@ resource "aws_ecs_service" "frontend" {
   load_balancer {
     target_group_arn = aws_lb_target_group.frontend.arn
     container_name   = "frontend"
-    container_port   = 80   # Updated to match ECR build task definition
+    container_port   = 80
   }
 
-  depends_on = [aws_lb_listener.frontend]
+  depends_on = [aws_lb_listener.external]
 
   tags = local.common_tags
-} 
+}
 
+# Scraper Service
 resource "aws_ecs_service" "scraper" {
   count           = var.scraper_replicas > 0 ? 1 : 0
   name            = "${var.environment}-mercado-scraper-service"
   cluster         = aws_ecs_cluster.mercado_cluster.id
   task_definition = aws_ecs_task_definition.scraper_task.arn
   desired_count   = var.scraper_replicas
+  
   capacity_provider_strategy {
-  capacity_provider = "FARGATE_SPOT"
-  weight            = 1        # 100 % Spot
-  base              = 0
-}
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 1
+    base              = 0
+  }
 
   network_configuration {
     subnets          = var.private_subnet_ids
     security_groups  = [aws_security_group.ecs_tasks.id, var.db_access_sg_id]
     assign_public_ip = false
   }
-
-  # No external load balancer needed if the scraper just communicates with RDS
 }
-
-# Removed NLB security group - no longer needed with direct ALB routing
-
-# Removed NLB - using direct ALB routing instead
-
-# Removed NLB target group - using ALB target group instead
-
-# Removed NLB wrapper target group - using direct ALB routing
-
-# Removed NLB attachment - no longer needed
-
-# Removed NLB listener - no longer needed with direct ALB routing
-
-# Outputs
-# Removed NLB output - using ALB only
