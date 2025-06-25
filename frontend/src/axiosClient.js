@@ -22,12 +22,19 @@ export function setAuthContext(authContextGetter) {
 // Optionally, you can add interceptors for requests/responses
 axiosClient.interceptors.request.use(
   (config) => {
-    // Add OIDC access token if available
+    // 1️⃣  Prefer a supplied auth context …
     if (getAuthContext) {
       const auth = getAuthContext();
-      if (auth.isAuthenticated && auth.user?.access_token) {
+      if (auth?.isAuthenticated && auth.user?.access_token) {
         config.headers.Authorization = `Bearer ${auth.user.access_token}`;
+        return config;
       }
+    }
+
+    // 2️⃣  …else fall back to the one we stashed in localStorage
+    const token = localStorage.getItem("access_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },

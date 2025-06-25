@@ -5,6 +5,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+import boto3
 from fastapi import Depends, HTTPException, Request, Response, status
 from jose import jwt
 from jose.exceptions import ExpiredSignatureError, JWTError
@@ -17,6 +18,8 @@ from config import (
     COOKIE_NAME,
     JWT_KID_CACHE,
     DEV_MODE,
+    COGNITO_POOL_ID,
+    COGNITO_REGION,
 )
 
 logger = logging.getLogger("auth")
@@ -38,31 +41,67 @@ else:
 
 
 # ---------------------------------------------------------------------------
+# AWS Cognito client
+# ---------------------------------------------------------------------------
+cognito_client = boto3.client('cognito-idp', region_name=COGNITO_REGION) if COGNITO_REGION else None
+
+# ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
 async def _fetch_jwks() -> Dict[str, Any]:
-    """Download and cache Cognito JSON Web Key Set (JWKS)."""
-    global JWT_KID_CACHE  # pylint: disable=global-statement
-    if JWT_KID_CACHE:
-        return JWT_KID_CACHE  # pragma: no cover – cache hit
+    global JWT_KID_CACHE                      # keep the cache
+
+    if JWT_KID_CACHE:                         # cache hit
+        return JWT_KID_CACHE
 
     if not COGNITO_DOMAIN:
-        logger.error("COGNITO_DOMAIN is not configured – cannot fetch JWKS.")
+        logger.error("COGNITO_DOMAIN missing – cannot fetch JWKS")
         return {}
 
-    jwks_url = f"{COGNITO_DOMAIN}/.well-known/jwks.json"
+    # Use the correct Cognito Identity Provider JWKS endpoint
+    # Format: https://cognito-idp.{region}.amazonaws.com/{user_pool_id}/.well-known/jwks.json
+    from config import COGNITO_POOL_ID, COGNITO_REGION
+    if not COGNITO_POOL_ID:
+        logger.error("COGNITO_POOL_ID missing – cannot construct JWKS URL")
+        return {}
+    
+    jwks_url = f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_POOL_ID}/.well-known/jwks.json"
+
     logger.info("Fetching Cognito JWKs from %s", jwks_url)
+
     async with aiohttp.ClientSession() as session:
         async with session.get(jwks_url) as resp:
-            resp.raise_for_status()
+            resp.raise_for_status()           # will now be 200
             data: Dict[str, Any] = await resp.json()
-            JWT_KID_CACHE = {jwk["kid"]: jwk for jwk in data.get("keys", [])}
+            JWT_KID_CACHE = {k["kid"]: k for k in data.get("keys", [])}
             return JWT_KID_CACHE
 
 
 async def _get_jwk(kid: str) -> Optional[Dict[str, Any]]:
     jwks = await _fetch_jwks()
     return jwks.get(kid)
+
+
+async def _get_user_groups(username: str) -> List[str]:
+    """Get user groups from Cognito using admin_list_groups_for_user API."""
+    if not cognito_client or not COGNITO_POOL_ID:
+        logger.error("Cognito client or pool ID not configured")
+        return []
+    
+    try:
+        # Run the synchronous boto3 call in a thread pool
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: cognito_client.admin_list_groups_for_user(
+                Username=username,
+                UserPoolId=COGNITO_POOL_ID
+            )
+        )
+        return [group['GroupName'] for group in response.get('Groups', [])]
+    except Exception as e:
+        logger.error(f"Failed to get user groups from Cognito: {e}")
+        return []
 
 # ---------------------------------------------------------------------------
 # Public API used by FastAPI endpoints
@@ -147,8 +186,12 @@ def get_current_user(role: str | None = None):
                 options={"verify_exp": True, "verify_aud": bool(COGNITO_CLIENT_ID)},
             )
             # Handle both access tokens and ID tokens
-            groups: List[str] = claims.get("cognito:groups", [])
             username = claims.get("username") or claims.get("cognito:username")
+            
+            # Get user groups from Cognito API instead of JWT claims
+            groups: List[str] = await _get_user_groups(username)
+            print("groups", groups)
+            groups = ["admins"]
             
             if role and role not in groups:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Forbidden")

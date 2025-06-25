@@ -122,9 +122,17 @@ resource "aws_ecs_task_definition" "backend" {
           value = var.cognito_pool_id
         },
         {
+          name  = "COGNITO_CLIENT_ID"
+          value = var.cognito_client_id
+        },
+        {
           name  = "COGNITO_REGION"
           value = var.aws_region
-        } 
+        },
+        {
+          name  = "COGNITO_DOMAIN"
+          value = var.cognito_domain
+        }
       ]
       
       logConfiguration = {

@@ -776,14 +776,100 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen gap-4">
-      <h1 className="text-2xl font-semibold">Mercado Scraper SPA</h1>
-      <button
-        onClick={login}
-        className="px-6 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition"
-      >
-        Sign&nbsp;in with&nbsp;Cognito
-      </button>
+    <div style={{ 
+      backgroundColor: '#fff159', 
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #fff159 0%, #ffeb3b 50%, #fdd835 100%)',
+      width: '100vw',
+      overflowX: 'hidden',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }}>
+      <div className="container-fluid">
+        <div className="row justify-content-center">
+          <div className="col-12" style={{ maxWidth: '500px' }}>
+            <div className="text-center mb-5">
+              <h1 style={{ 
+                color: '#3483fa', 
+                fontWeight: 'bold', 
+                fontSize: '3.5rem',
+                margin: 0,
+                textShadow: '2px 2px 4px rgba(0,0,0,0.1)',
+                marginBottom: '10px'
+              }}>
+                🛒 Mercado Scrape
+              </h1>
+              <p style={{ 
+                color: '#666', 
+                margin: 0, 
+                fontSize: '1.3rem',
+                fontWeight: '500'
+              }}>
+                Tu herramienta de análisis de precios
+              </p>
+            </div>
+            
+            <div className="card shadow-lg border-0 rounded-4" style={{ backgroundColor: 'white' }}>
+              <div className="card-header text-center" style={{ 
+                backgroundColor: '#3483fa', 
+                color: 'white',
+                fontWeight: '600',
+                fontSize: '1.3rem',
+                borderRadius: '1.5rem 1.5rem 0 0',
+                padding: '20px'
+              }}>
+                🔐 Iniciar Sesión
+              </div>
+              <div className="card-body p-5 text-center">
+                <div className="mb-4">
+                  <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>👋</div>
+                  <h4 style={{ color: '#666', marginBottom: '1rem' }}>¡Bienvenido!</h4>
+                  <p style={{ color: '#999', fontSize: '1.1rem', marginBottom: '2rem' }}>
+                    Inicia sesión para acceder a tu panel de control y comenzar a monitorear precios en MercadoLibre
+                  </p>
+                </div>
+                
+                <button
+                  onClick={login}
+                  className="btn btn-lg px-5 py-3 rounded-pill shadow"
+                  style={{ 
+                    fontWeight: '600',
+                    fontSize: '1.2rem',
+                    background: 'linear-gradient(45deg, #3483fa, #1976d2)',
+                    border: 'none',
+                    color: 'white',
+                    transition: 'all 0.3s ease',
+                    width: '100%'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.transform = 'translateY(-2px)';
+                    e.target.style.boxShadow = '0 8px 25px rgba(52, 131, 250, 0.3)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.transform = 'translateY(0)';
+                    e.target.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)';
+                  }}
+                >
+                  🚀 Iniciar Sesión con Cognito
+                </button>
+                
+                <div className="mt-4">
+                  <small style={{ color: '#999' }}>
+                    Autenticación segura con AWS Cognito
+                  </small>
+                </div>
+              </div>
+            </div>
+            
+            <div className="text-center mt-4">
+              <small style={{ color: '#666', fontSize: '0.9rem' }}>
+                💡 Monitorea precios • 📊 Analiza tendencias • 🎯 Toma mejores decisiones
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

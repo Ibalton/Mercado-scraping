@@ -6,14 +6,29 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import asyncio
 import logging
+import boto3
+from botocore.exceptions import ClientError, NoCredentialsError
 from api_gateway import trigger_global_scrape
 from auth import login as cognito_login, auth_callback, admin_required, authenticated_user, logout as logout_handler
+from config import COGNITO_POOL_ID, COGNITO_REGION
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
 api = API()
+
+# Initialize AWS Cognito client
+def get_cognito_client():
+    """Get AWS Cognito Identity Provider client"""
+    try:
+        return boto3.client('cognito-idp', region_name=COGNITO_REGION)
+    except NoCredentialsError:
+        logger.error("AWS credentials not configured")
+        raise HTTPException(status_code=500, detail="AWS credentials not configured")
+    except Exception as e:
+        logger.error(f"Error creating Cognito client: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error connecting to AWS Cognito")
 
 app = FastAPI()
 
@@ -124,6 +139,63 @@ async def trigger_scrape():
     except Exception as e:
         logger.error("Error triggering scrape via scraper service: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/cognito/group/{group_name}", dependencies=[Depends(admin_required)])
+async def get_cognito_group(group_name: str, user_pool_id: str = Query(default=None)):
+    """
+    Get information about a user group from AWS Cognito.
+    
+    Args:
+        group_name: The name of the group to retrieve
+        user_pool_id: Optional user pool ID, defaults to configured pool ID
+    
+    Returns:
+        Group information including description, precedence, IAM role, etc.
+    """
+    # Use provided user_pool_id or fall back to configured one
+    pool_id = user_pool_id or COGNITO_POOL_ID
+    
+    if not pool_id:
+        raise HTTPException(status_code=400, detail="User pool ID not configured")
+    
+    if not group_name:
+        raise HTTPException(status_code=400, detail="Group name is required")
+    
+    try:
+        # Run the blocking AWS API call in a thread
+        cognito_client = get_cognito_client()
+        
+        response = await asyncio.to_thread(
+            cognito_client.get_group,
+            GroupName=group_name,
+            UserPoolId=pool_id
+        )
+        
+        logger.info(f"Successfully retrieved group '{group_name}' from user pool '{pool_id}'")
+        return response['Group']
+        
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        error_message = e.response['Error']['Message']
+        
+        if error_code == 'ResourceNotFoundException':
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Group '{group_name}' not found in user pool '{pool_id}'"
+            )
+        elif error_code == 'InvalidParameterException':
+            raise HTTPException(status_code=400, detail=f"Invalid parameter: {error_message}")
+        elif error_code == 'NotAuthorizedException':
+            raise HTTPException(status_code=403, detail="Not authorized to access this resource")
+        elif error_code == 'TooManyRequestsException':
+            raise HTTPException(status_code=429, detail="Too many requests")
+        else:
+            logger.error(f"AWS Cognito error: {error_code} - {error_message}")
+            raise HTTPException(status_code=500, detail=f"AWS Cognito error: {error_message}")
+            
+    except Exception as e:
+        logger.error(f"Unexpected error retrieving group '{group_name}': {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 if __name__ == "__main__":
