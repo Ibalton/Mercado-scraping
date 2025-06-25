@@ -48,10 +48,7 @@ variable "backend_image" {
   type        = string
 }
 
-variable "frontend_image" {
-  description = "Frontend Docker image URI with immutable tag"
-  type        = string
-} 
+
 
 variable "scraper_image" {
   description = "Scraper Docker image URI with immutable tag"
@@ -61,12 +58,6 @@ variable "scraper_image" {
 # Meta-argument variables for scaling
 variable "backend_replicas" {
   description = "Number of backend service replicas"
-  type        = number
-  default     = 1
-}
-
-variable "frontend_replicas" {
-  description = "Number of frontend service replicas"
   type        = number
   default     = 1
 }
@@ -107,16 +98,4 @@ variable "cognito_client_id" {
 variable "cognito_domain" {
   description = "Cognito hosted-UI domain prefix (e.g. myapp.auth.us-east-1.amazoncognito.com)"
   type        = string
-}
-
-variable "cognito_redirect_uri" {
-  description = "Cognito redirect URI for the frontend"
-  type        = string
-  default     = ""
-}
-
-variable "cognito_logout_uri" {
-  description = "Cognito logout URI for the frontend"
-  type        = string
-  default     = ""
 }

@@ -63,7 +63,6 @@ variable "environments" {
   type = map(object({
     instance_type     = string
     backend_replicas  = number
-    frontend_replicas = number
     scraper_replicas  = number
     db_instance_class = string # Add RDS instance class per environment
   }))
@@ -78,7 +77,6 @@ variable "environments" {
     prod = {
       instance_type     = "t2.small"
       backend_replicas  = 2
-      frontend_replicas = 2
       scraper_replicas  = 1
       db_instance_class = "db.t3.small" # Larger instance for prod
     }

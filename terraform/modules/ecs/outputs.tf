@@ -20,10 +20,7 @@ output "backend_service_name" {
   value       = length(aws_ecs_service.backend) > 0 ? aws_ecs_service.backend[0].name : null
 }
 
-output "frontend_service_name" {
-  description = "Name of the frontend ECS service"
-  value       = length(aws_ecs_service.frontend) > 0 ? aws_ecs_service.frontend[0].name : null
-}
+
 
 output "scraper_service_name" {
   description = "Name of the scraper ECS service"
@@ -53,11 +50,6 @@ output "backend_url" {
 output "internal_backend_url" {
   description = "Internal backend API URL (direct NLB access)"
   value       = "http://${aws_lb.internal.dns_name}"
-}
-
-output "frontend_url" {
-  description = "Frontend application URL"
-  value       = "http://${aws_lb.external.dns_name}"
 }
 
 output "load_balancer_arn_suffix" {

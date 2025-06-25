@@ -72,12 +72,6 @@ resource "aws_cloudwatch_log_group" "backend" {
   tags              = local.common_tags
 }
 
-resource "aws_cloudwatch_log_group" "frontend" {
-  name              = "/ecs/${var.environment}-mercado-frontend"
-  retention_in_days = 7
-  tags              = local.common_tags
-}
-
 resource "aws_cloudwatch_log_group" "scraper" {
   name              = "/ecs/${var.environment}-mercado-scraper"
   retention_in_days = 7
@@ -142,67 +136,6 @@ resource "aws_ecs_task_definition" "backend" {
         logDriver = "awslogs"
         options = {
           "awslogs-group"         = aws_cloudwatch_log_group.backend.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
-        }
-      }
-    }
-  ])
-}
-
-# Frontend Task Definition
-resource "aws_ecs_task_definition" "frontend" {
-  family                   = "${var.environment}-mercado-frontend"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu    = 256
-  memory = 512
-  execution_role_arn = data.aws_iam_role.lab_role.arn
-  task_role_arn      = data.aws_iam_role.lab_role.arn
-
-  container_definitions = jsonencode([
-    {
-      name  = "frontend"
-      image = var.frontend_image
-      essential = true
-
-      portMappings = [{ containerPort = 80 }]
-
-      environment = [
-        {
-          name  = "VITE_API_URL"
-          value = "/api"
-        },
-        {
-          name  = "VITE_COGNITO_POOL_ID"
-          value = var.cognito_pool_id
-        },
-        {
-          name  = "VITE_COGNITO_CLIENT_ID"
-          value = var.cognito_client_id
-        },
-        {
-          name  = "VITE_COGNITO_REGION"
-          value = var.aws_region
-        },
-        {
-          name  = "VITE_COGNITO_DOMAIN"
-          value = var.cognito_domain
-        },
-        {
-          name  = "VITE_COGNITO_LOGOUT_URI"
-          value = var.cognito_logout_uri != "" ? var.cognito_logout_uri : "PLACEHOLDER_WILL_BE_UPDATED"
-        },
-        {
-          name  = "VITE_COGNITO_REDIRECT_URI"
-          value = var.cognito_redirect_uri != "" ? var.cognito_redirect_uri : "PLACEHOLDER_WILL_BE_UPDATED"
-        }
-      ]
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.frontend.name
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "ecs"
         }
@@ -400,12 +333,15 @@ resource "aws_lb_listener" "external" {
   load_balancer_arn = aws_lb.external.arn
   port              = "80"
   protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.frontend.arn
+  default_action { # do nothing
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      status_code  = "404"
+    }
   }
 }
+
 
 # Internal NLB Listener (port 80 -> 8000)
 resource "aws_lb_listener" "internal" {
@@ -476,31 +412,6 @@ resource "aws_ecs_service" "backend" {
   tags = local.common_tags
 }
 
-# Frontend Service
-resource "aws_ecs_service" "frontend" {
-  count           = var.frontend_replicas > 0 ? 1 : 0
-  name            = "${var.environment}-mercado-frontend-service"
-  cluster         = aws_ecs_cluster.mercado_cluster.id
-  task_definition = aws_ecs_task_definition.frontend.arn
-  desired_count   = var.frontend_replicas
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = var.public_subnet_ids
-    security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.frontend.arn
-    container_name   = "frontend"
-    container_port   = 80
-  }
-
-  depends_on = [aws_lb_listener.external]
-
-  tags = local.common_tags
-}
 
 # Scraper Service
 resource "aws_ecs_service" "scraper" {

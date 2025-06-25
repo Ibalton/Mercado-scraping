@@ -137,8 +137,9 @@ module "ecr_build" {
   repository_name    = "mercado-scraper" # Match the ECR repo name
   project_root       = ".."              # Parent directory with backend/frontend folders
   auto_build_images  = true              # Enable building!
+  vite_url = module.s3.s3_bucket_website_url
 
-  depends_on = [module.ecr]
+  depends_on = [module.ecr,module.s3.s3_bucket_website_url] # Ensure ECR and S3 are created first
 }
 
 
@@ -158,13 +159,11 @@ module "ecs" {
   # Environment-specific configuration
   environment       = each.key
   backend_replicas  = each.value.backend_replicas
-  frontend_replicas = each.value.frontend_replicas
   scraper_replicas  = each.value.scraper_replicas
   default_tags      = local.default_tags
 
   # Use image URIs from ECR build module with immutable tags
   backend_image  = module.ecr_build.backend_image
-  frontend_image = module.ecr_build.frontend_image
   scraper_image  = module.ecr_build.scraper_image
 
   sqs_queue_url = module.sqs.scraper_sqs_queue_url
@@ -174,9 +173,6 @@ module "ecs" {
   cognito_client_id = aws_cognito_user_pool_client.spa.id
   cognito_domain    = aws_cognito_user_pool_domain.this.domain
 
-  # Pass the actual callback URL that's known immediately
-  cognito_redirect_uri = local.cognito_callback_urls[each.key]
-  cognito_logout_uri   = local.cognito_logout_urls[each.key]
 
   depends_on = [module.ecr_build,module.sqs]
 }
@@ -212,10 +208,10 @@ module "auth_proxy" {
   client_id       = aws_cognito_user_pool_client.spa.id
   client_secret   = aws_cognito_user_pool_client.spa.client_secret
   cognito_region  = var.aws_region
-  redirect_url_ok = "${module.ecs[each.key].frontend_url}/login"
+  redirect_url_ok = "${module.s3.s3_bucket_website_url}/login"
   cognito_domain  = aws_cognito_user_pool_domain.this.domain
   default_tags    = local.default_tags
-  alb_dns         = module.ecs[each.key].load_balancer_dns_name
+  alb_dns         = module.s3.s3_bucket_website_url
   
   # Pass API Gateway info
   api_gateway_id               = aws_apigatewayv2_api.cognito_callback[each.key].id
@@ -224,6 +220,7 @@ module "auth_proxy" {
 
   depends_on = [
     module.ecs,
+    module.s3,
     aws_apigatewayv2_api.cognito_callback,
     aws_apigatewayv2_stage.prod
   ]
@@ -240,10 +237,7 @@ output "backend_urls" {
   value       = { for env, ecs in module.ecs : env => ecs.backend_url }
 }
 
-output "frontend_urls" {
-  description = "Frontend application URLs by environment"
-  value       = { for env, ecs in module.ecs : env => ecs.frontend_url }
-}
+
 
 output "load_balancer_dns_names" {
   description = "Load balancer DNS names by environment"
@@ -319,9 +313,37 @@ resource "aws_cognito_user_pool_domain" "this" {
   user_pool_id = aws_cognito_user_pool.mercado.id
 }
 
+
+module "s3" {
+  source = "./modules/s3"
+  
+  # Required variables for the S3 module
+  vite_build_folder = "../frontend/dist"  # Path to Vite build output
+  vite_api_url = module.ecs["prod"].backend_url   # Use the backend_url output from the ECS module
+  vite_cognito_pool_id = aws_cognito_user_pool.mercado.id
+  vite_cognito_client_id = aws_cognito_user_pool_client.spa.id
+  vite_cognito_region = var.aws_region
+  vite_cognito_domain = aws_cognito_user_pool_domain.this.domain
+  vite_cognito_redirect_uri = local.cognito_callback_urls["prod"]  # Use prod callback URL
+  vite_cognito_logout_uri = local.cognito_logout_urls["prod"]      # Use prod logout URL
+  
+  
+}
+
+output "name_of_s3_bucket" {
+  description = "Name of the S3 bucket for Vite static site"
+  value       = module.s3.s3_bucket_name
+  
+}
+
+output "s3_bucket_website_url" {
+  description = "URL of the S3 bucket website"
+  value       = module.s3.s3_bucket_website_url
+}
+
 output "cognito_pool_id" {
   description = "ID of the Cognito User Pool"
-  value       = aws_cognito_user_pool.mercado.id
+  value       = "http://${aws_cognito_user_pool.mercado.id}"
 }
 
 output "cognito_client_id" {

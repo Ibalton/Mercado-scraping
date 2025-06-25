@@ -83,7 +83,7 @@ def handler(event, _):
         return {
             "statusCode": 302,
             "headers": {
-                "Location": f"http://{ALB_HOST}/#{fragment}",
+                "Location": f"{ALB_HOST}/#{fragment}",
                 "Cache-Control": "no-cache, no-store, must-revalidate"
             }
         }

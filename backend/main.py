@@ -11,7 +11,7 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from api_gateway import trigger_global_scrape
 from auth import login as cognito_login, auth_callback, admin_required, authenticated_user, logout as logout_handler
 from config import COGNITO_POOL_ID, COGNITO_REGION
-
+import os
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
@@ -32,6 +32,7 @@ def get_cognito_client():
 
 app = FastAPI()
 
+print("VITE:", os.getenv("VITE_URL"))
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,6 +40,7 @@ app.add_middleware(
         "http://localhost:5173",  # Frontend development server
         "http://localhost:3000",  # Alternative React dev server
         "http://127.0.0.1:5173",  # Alternative localhost
+        os.getenv("VITE_URL")
     ],
     allow_credentials=True,
     allow_methods=["*"],

@@ -313,7 +313,7 @@ function App() {
               </div>
               <div className="d-flex align-items-center gap-3">
                 <div className="text-end">
-                  <div className="text-white">Welcome, {userProfile?.username || 'User'}</div>
+                  <div className="text-white">Welcome, {userProfile?.email || 'User'}</div>
                   {userProfile?.is_admin && (
                     <small className="text-warning">⚡ Admin Access</small>
                   )}
@@ -396,6 +396,7 @@ function App() {
                     >
                       👤 Administrar Clientes
                     </button>
+                  {/*
                     <button 
                       className="btn btn-lg px-4 py-3 rounded-pill shadow-sm btn-outline-success border-2"
                       style={{ fontWeight: '600' }}
@@ -403,6 +404,7 @@ function App() {
                     >
                       🚀 Ejecutar Scraper
                     </button>
+                  */}
                   </>
                 )}
               </div>
