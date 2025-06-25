@@ -178,7 +178,7 @@ module "ecs" {
   cognito_redirect_uri = local.cognito_callback_urls[each.key]
   cognito_logout_uri   = local.cognito_logout_urls[each.key]
 
-  depends_on = [module.ecr_build]
+  depends_on = [module.ecr_build,module.sqs]
 
 }
 
