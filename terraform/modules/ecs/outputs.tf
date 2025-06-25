@@ -18,10 +18,7 @@ output "backend_service_name" {
   value       = length(aws_ecs_service.backend) > 0 ? aws_ecs_service.backend[0].name : null
 }
 
-output "frontend_service_name" {
-  description = "Name of the frontend ECS service"
-  value       = length(aws_ecs_service.frontend) > 0 ? aws_ecs_service.frontend[0].name : null
-}
+
 
 output "scraper_service_name" {
   description = "Name of the scraper ECS service"
@@ -43,10 +40,6 @@ output "backend_url" {
   value       = "http://${aws_lb.main.dns_name}/api"
 }
 
-output "frontend_url" {
-  description = "Frontend application URL"
-  value       = "http://${aws_lb.main.dns_name}"
-}
 
 output "load_balancer_arn_suffix" {
   description = "ARN suffix of the load balancer for monitoring"
