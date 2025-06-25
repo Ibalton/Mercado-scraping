@@ -79,7 +79,7 @@ resource "null_resource" "build_vite_site" {
 
 resource "null_resource" "upload_vite_site" {
   provisioner "local-exec" {
-    command = "aws s3 sync ../frontend/dist s3://my-vite-static-site --delete"
+    command = "aws s3 sync ../frontend/dist s3://${aws_s3_bucket.vite_site.id} --delete"
   }
 
   triggers = {
