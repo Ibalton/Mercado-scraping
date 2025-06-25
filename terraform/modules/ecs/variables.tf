@@ -93,9 +93,26 @@ variable "db_access_sg_id" {
 variable "cognito_pool_id" {
   description = "Cognito User Pool ID"
   type        = string
-}
+} 
 
 variable "cognito_client_id" {
-  description = "Cognito User Pool Client ID"
+  description = "Cognito User-Pool Client ID"
   type        = string
-} 
+}
+
+variable "cognito_domain" {
+  description = "Cognito hosted-UI domain prefix (e.g. myapp.auth.us-east-1.amazoncognito.com)"
+  type        = string
+}
+
+variable "cognito_redirect_uri" {
+  description = "Cognito redirect URI for the frontend"
+  type        = string
+  default     = ""  # Empty default
+}
+
+variable "cognito_logout_uri" {
+  description = "Cognito logout URI for the frontend"
+  type        = string
+  default     = ""  # Empty default
+}

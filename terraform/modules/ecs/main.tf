@@ -26,6 +26,7 @@ locals {
       Project     = "mercado-scraper"
     }
   )
+  logout_uri = "https://${var.cognito_domain}.auth.${var.aws_region}.amazoncognito.com/logout?client_id=${var.cognito_client_id}&logout_uri=http://${aws_lb.main.dns_name}"
 }
 
 # Security Group for ECS Tasks
@@ -44,11 +45,11 @@ resource "aws_security_group" "ecs_tasks" {
   }
 
   ingress {
-    description     = "Internal ALB to backend containers (:8000)"
+    description     = "ALB to backend containers (:8000)"
     protocol        = "tcp"
     from_port       = 8000
     to_port         = 8000
-    security_groups = [aws_security_group.backend_alb.id, aws_security_group.alb.id]
+    security_groups = [aws_security_group.alb.id]
   }
 
   egress {
@@ -121,13 +122,9 @@ resource "aws_ecs_task_definition" "backend" {
           value = var.cognito_pool_id
         },
         {
-          name  = "COGNITO_CLIENT_ID"
-          value = var.cognito_client_id
-        },
-        {
           name  = "COGNITO_REGION"
           value = var.aws_region
-        }
+        } 
       ]
       
       logConfiguration = {
@@ -164,6 +161,30 @@ resource "aws_ecs_task_definition" "frontend" {
         {
           name  = "VITE_API_URL"
           value = "/api"
+        },
+        {
+          name  = "VITE_COGNITO_POOL_ID"
+          value = var.cognito_pool_id
+        },
+        {
+          name  = "VITE_COGNITO_CLIENT_ID"
+          value = var.cognito_client_id
+        },
+        {
+          name  = "VITE_COGNITO_REGION"
+          value = var.aws_region         # already passed into the module
+        },
+        {
+          name  = "VITE_COGNITO_DOMAIN"
+          value = var.cognito_domain
+        },
+        {
+          name  = "VITE_COGNITO_LOGOUT_URI"
+          value = var.cognito_logout_uri != "" ? var.cognito_logout_uri : "PLACEHOLDER_WILL_BE_UPDATED"
+        },
+        {
+          name      = "VITE_COGNITO_REDIRECT_URI"
+          value = var.cognito_redirect_uri != "" ? var.cognito_redirect_uri : "PLACEHOLDER_WILL_BE_UPDATED"
         }
       ]
 
@@ -178,6 +199,7 @@ resource "aws_ecs_task_definition" "frontend" {
     }
   ])
 }
+
 
 resource "aws_ecs_task_definition" "scraper_task" {
   family                   = "${var.environment}-mercado-scraper-task"
@@ -272,9 +294,9 @@ resource "aws_security_group" "alb" {
   })
 }
 
-# Target Groups
+# Target group for backend ECS tasks (direct ALB routing)
 resource "aws_lb_target_group" "backend" {
-  name        = "${var.environment}-mercado-backend-tg"
+  name        = "${var.environment}-backend-tg"
   port        = 8000
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -286,7 +308,8 @@ resource "aws_lb_target_group" "backend" {
     unhealthy_threshold = 5
     timeout             = 15
     interval            = 60
-    path                = "/health"
+    protocol            = "HTTP"
+    path                = "/api/health"
     matcher             = "200"
   }
 
@@ -313,6 +336,28 @@ resource "aws_lb_target_group" "frontend" {
   tags = local.common_tags
 }
 
+# Legacy public target group (removed since using NLB)
+# resource "aws_lb_target_group" "backend_public" {
+#   name        = "${var.environment}-backend-public-tg"
+#   port        = 8000
+#   protocol    = "HTTP"
+#   vpc_id      = var.vpc_id
+#   target_type = "ip"
+#
+#   health_check {
+#     enabled             = true
+#     healthy_threshold   = 2
+#     unhealthy_threshold = 5
+#     timeout             = 15
+#     interval            = 60
+#     protocol            = "HTTP"
+#     path                = "/health"
+#     matcher             = "200"
+#   }
+#
+#   tags = local.common_tags
+# }
+
 # ALB Listeners
 resource "aws_lb_listener" "frontend" {
   load_balancer_arn = aws_lb.main.arn
@@ -325,42 +370,42 @@ resource "aws_lb_listener" "frontend" {
   }
 }
 
-# --- New Target Group for internal ALB (used by public ALB rule) ---
-resource "aws_lb_target_group" "backend_internal_alb" {
-  name        = "${var.environment}-backend-alb-tg"
-  port        = 8000
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
-  target_type = "alb"
+# Legacy target group and attachment (replaced by NLB wrapper)
+# resource "aws_lb_target_group" "backend_internal_alb" {
+#   name        = "${var.environment}-backend-alb-tg"
+#   port        = 8000
+#   protocol    = "TCP"
+#   vpc_id      = var.vpc_id
+#   target_type = "alb"
+#
+#   health_check {
+#     enabled             = true
+#     healthy_threshold   = 2
+#     unhealthy_threshold = 5
+#     timeout             = 15
+#     interval            = 60
+#     protocol            = "HTTP"
+#     path                = "/health"
+#     matcher             = "200"
+#   }
+#
+#   tags = local.common_tags
+# }
 
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 5
-    timeout             = 15
-    interval            = 60
-    path                = "/health"
-    matcher             = "200"
-  }
+# resource "aws_lb_target_group_attachment" "backend_alb_attachment" {
+#   target_group_arn = aws_lb_target_group.backend_internal_alb.arn
+#   target_id        = aws_lb.backend_alb.arn
+#   port             = 8000
+# }
 
-  tags = local.common_tags
-}
-
-# Attach the internal ALB as a target in the new TG
-resource "aws_lb_target_group_attachment" "backend_alb_attachment" {
-  target_group_arn = aws_lb_target_group.backend_internal_alb.arn
-  target_id        = aws_lb.backend_alb.arn
-  port             = 8000
-}
-
-# --- Update api_proxy rule to forward to the new TG ---
+# Path-based routing rule for /api/* to backend
 resource "aws_lb_listener_rule" "api_proxy" {
   listener_arn = aws_lb_listener.frontend.arn
   priority     = 10
 
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.backend_internal_alb.arn
+    target_group_arn = aws_lb_target_group.backend.arn  # Direct to backend TG
   }
 
   condition {
@@ -384,14 +429,14 @@ resource "aws_ecs_service" "backend" {
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.backend.arn
+    target_group_arn = aws_lb_target_group.backend.arn  # Use ALB target group
     container_name   = "backend"
     container_port   = 8000
   }
 
-  health_check_grace_period_seconds = 1800   # 30 min
+  health_check_grace_period_seconds = 1800
 
-  depends_on = [aws_lb_listener.backend_internal]
+  depends_on = [aws_lb_listener.frontend]  # Depend on ALB listener
 
   tags = local.common_tags
 }
@@ -442,54 +487,17 @@ resource "aws_ecs_service" "scraper" {
   # No external load balancer needed if the scraper just communicates with RDS
 }
 
-# New Security Group for internal backend ALB
-resource "aws_security_group" "backend_alb" {
-  name        = "${var.environment}-mercado-backend-alb"
-  description = "Security group for internal backend ALB"
-  vpc_id      = var.vpc_id
+# Removed NLB security group - no longer needed with direct ALB routing
 
-  ingress {
-    description     = "Allow traffic from public ALB SG on :8000"
-    protocol        = "tcp"
-    from_port       = 8000
-    to_port         = 8000
-    security_groups = [aws_security_group.alb.id]
-  }
+# Removed NLB - using direct ALB routing instead
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+# Removed NLB target group - using ALB target group instead
 
-  tags = local.common_tags
-}
+# Removed NLB wrapper target group - using direct ALB routing
 
-# Internal Backend ALB
-resource "aws_lb" "backend_alb" {
-  name               = "${var.environment}-backend-alb"
-  internal           = true
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.backend_alb.id]
-  subnets            = var.private_subnet_ids
-  tags               = local.common_tags
-}
+# Removed NLB attachment - no longer needed
 
-# Listener for internal backend ALB
-resource "aws_lb_listener" "backend_internal" {
-  load_balancer_arn = aws_lb.backend_alb.arn
-  port              = "8000"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.backend.arn
-  }
-}
+# Removed NLB listener - no longer needed with direct ALB routing
 
 # Outputs
-output "backend_alb_dns_name" {
-  description = "DNS name of the internal backend ALB"
-  value       = aws_lb.backend_alb.dns_name
-}
+# Removed NLB output - using ALB only

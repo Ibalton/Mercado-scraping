@@ -7,6 +7,50 @@ locals {
   }
 }
 
+# Create API Gateways for each environment (outside auth_proxy module)
+resource "aws_apigatewayv2_api" "cognito_callback" {
+  for_each = var.environments
+  
+  name          = "${each.key}-cognito-callback-api"
+  protocol_type = "HTTP"
+  description   = "HTTPS proxy for Cognito callback URLs"
+
+  cors_configuration {
+    allow_credentials = false
+    allow_headers     = ["*"]
+    allow_methods     = ["*"]
+    allow_origins     = ["*"]
+    max_age          = 86400
+  }
+
+  tags = local.default_tags
+}
+
+# Create stages for each API Gateway
+resource "aws_apigatewayv2_stage" "prod" {
+  for_each = var.environments
+  
+  api_id      = aws_apigatewayv2_api.cognito_callback[each.key].id
+  name        = "prod"
+  auto_deploy = true
+
+  tags = local.default_tags
+}
+
+# Output the callback URLs (these are now known immediately)
+locals {
+  cognito_callback_urls = {
+    for env, api in aws_apigatewayv2_api.cognito_callback :
+    env => "${aws_apigatewayv2_stage.prod[env].invoke_url}/callback"
+  }
+  
+  # Add logout URLs to locals
+  cognito_logout_urls = {
+    for env, api in aws_apigatewayv2_api.cognito_callback :
+    env => "${aws_apigatewayv2_stage.prod[env].invoke_url}/logout"
+  }
+}
+
 module "vpc" {
   source = "./modules/vpc"
 
@@ -97,6 +141,7 @@ module "ecr_build" {
   depends_on = [module.ecr]
 }
 
+
 # for_each for multiple environments
 module "ecs" {
   for_each = var.environments
@@ -125,10 +170,16 @@ module "ecs" {
   sqs_queue_url = module.sqs.scraper_sqs_queue_url
   sqs_region    = var.aws_region
 
-  cognito_pool_id   = aws_cognito_user_pool.mercado.id
-  cognito_client_id = aws_cognito_user_pool_client.spa.id
+  cognito_pool_id = aws_cognito_user_pool.mercado.id
+  cognito_client_id = aws_cognito_user_pool_client.spa.id   # NEW
+  cognito_domain    = aws_cognito_user_pool_domain.this.domain  # NEW
+
+  # Pass the actual callback URL that's known immediately
+  cognito_redirect_uri = local.cognito_callback_urls[each.key]
+  cognito_logout_uri   = local.cognito_logout_urls[each.key]
 
   depends_on = [module.ecr_build]
+
 }
 
 # Monitoring module for each environment
@@ -150,6 +201,33 @@ module "lambda" {
   database_url              = module.rds["prod"].database_url # Lambda uses prod DB by default
   lambda_subnet_ids         = module.vpc.private_subnet_ids
   lambda_security_group_ids = [aws_security_group.lambda.id]
+}
+
+# Auth proxy for Cognito HTTPS callback
+module "auth_proxy" {
+  for_each = var.environments
+  source   = "./modules/auth_proxy"
+
+  environment     = each.key
+  user_pool_id    = aws_cognito_user_pool.mercado.id
+  client_id       = aws_cognito_user_pool_client.spa.id
+  client_secret   = aws_cognito_user_pool_client.spa.client_secret
+  cognito_region  = var.aws_region
+  redirect_url_ok = "${module.ecs[each.key].frontend_url}/login"
+  cognito_domain  = aws_cognito_user_pool_domain.this.domain
+  default_tags    = local.default_tags
+  alb_dns         = module.ecs[each.key].load_balancer_dns_name
+  
+  # Pass API Gateway info
+  api_gateway_id               = aws_apigatewayv2_api.cognito_callback[each.key].id
+  api_gateway_execution_arn    = aws_apigatewayv2_api.cognito_callback[each.key].execution_arn
+  api_gateway_stage_invoke_url = aws_apigatewayv2_stage.prod[each.key].invoke_url
+
+  depends_on = [
+    module.ecs,
+    aws_apigatewayv2_api.cognito_callback,
+    aws_apigatewayv2_stage.prod
+  ]
 }
 
 # ECS-related outputs for each environment
@@ -209,29 +287,28 @@ resource "aws_cognito_user_pool" "mercado" {
   tags = local.default_tags
 }
 
+# Create Cognito User Pool Client early (before ECS)
 resource "aws_cognito_user_pool_client" "spa" {
   name         = "mercado-scraper-spa-client"
   user_pool_id = aws_cognito_user_pool.mercado.id
 
-  generate_secret              = false # SPA / public client
-  explicit_auth_flows          = ["ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_SRP_AUTH", "ALLOW_CUSTOM_AUTH"]
+  generate_secret              = true
   supported_identity_providers = ["COGNITO"]
 
-  callback_urls = [
-    # Front-end listener DNS will be injected at apply time via Terraform interpolation
-    # Using HTTP because Learner Lab does not provision ACM certs by default
-    for env, ecs in module.ecs : "${ecs.frontend_url}/login/callback"
-  ]
-
-  logout_urls = [
-    for env, ecs in module.ecs : "${ecs.frontend_url}"
-  ]
-
+  # Use the callback URLs from local
+  callback_urls = values(local.cognito_callback_urls)
+  
+  # Temporary placeholder for logout URLs - will be updated later
+  logout_urls = values(local.cognito_logout_urls)
+  
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes                 = ["email", "openid", "profile"]
 
-  depends_on = [aws_cognito_user_pool.mercado]
+  depends_on = [
+    aws_cognito_user_pool.mercado,
+    aws_apigatewayv2_stage.prod
+  ]
 }
 
 resource "random_pet" "cognito_domain" {
@@ -256,5 +333,15 @@ output "cognito_client_id" {
 output "cognito_domain" {
   description = "Cognito hosted UI domain"
   value       = aws_cognito_user_pool_domain.this.domain
+}
+
+output "cognito_callback_urls" {
+  description = "HTTPS callback URLs for Cognito by environment"
+  value       = local.cognito_callback_urls
+}
+
+output "cognito_logout_urls" {
+  description = "HTTPS logout URLs for Cognito by environment"
+  value       = local.cognito_logout_urls
 }
 
