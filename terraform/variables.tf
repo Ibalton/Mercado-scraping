@@ -42,21 +42,6 @@ variable "db_password" {
   description = "Password for the RDS instance"
 }
 
-variable "ami_id" {
-  description = "AMI ID for EC2 instances"
-  type        = string
-}
-
-variable "key_pair_name" {
-  description = "Key pair name for SSH access"
-  type        = string
-}
-
-variable "my_ip" {
-  description = "Your IP address with /32 for SSH"
-  type        = string
-}
-
 # New variables for multi-environment support and meta-arguments
 variable "environments" {
   description = "Configuration for different environments"
